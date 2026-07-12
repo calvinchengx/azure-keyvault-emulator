@@ -28,18 +28,26 @@ SP_SECRET=daemon-app-secret
 rm -rf "$WORK" && mkdir -p "$WORK/kvdata"
 trap 'kill $(cat "$WORK"/*.pid 2>/dev/null) 2>/dev/null || true' EXIT INT TERM
 
+# Let go fetch a newer toolchain if a dependency's go directive needs one —
+# CI may pin GOTOOLCHAIN=local, which would otherwise fail the install.
+export GOTOOLCHAIN=auto
+
 # Always go install a pinned version — a PATH binary (e.g. an older Homebrew
 # entra-emulator) may predate the Azure-resource carve-out this chain needs.
+# Errors are surfaced (no output suppression) and the binary is verified.
 install_bin() {
   # $1 = binary name, $2 = go install path with @version
-  GOBIN="$WORK" go install "$2" >/dev/null 2>&1
-  echo "$WORK/$1"
+  echo "    go install $2" >&2
+  GOBIN="$WORK" go install "$2"
+  test -x "$WORK/$1" || { echo "install failed: $WORK/$1 missing" >&2; exit 1; }
 }
 
 echo "==> installing entra-emulator + fabric-emulator (pinned)"
 # entra >= v0.2.1 has the https://vault.azure.net carve-out.
-ENTRA_BIN="$(install_bin entra-emulator "github.com/calvinchengx/entra-emulator/cmd/entra-emulator@${ENTRA_VERSION:-v0.2.1}")"
-FABRIC_BIN="$(install_bin fabric-emulator "github.com/calvinchengx/fabric-emulator/cmd/fabric-emulator@${FABRIC_VERSION:-latest}")"
+install_bin entra-emulator "github.com/calvinchengx/entra-emulator/cmd/entra-emulator@${ENTRA_VERSION:-v0.2.1}"
+install_bin fabric-emulator "github.com/calvinchengx/fabric-emulator/cmd/fabric-emulator@${FABRIC_VERSION:-latest}"
+ENTRA_BIN="$WORK/entra-emulator"
+FABRIC_BIN="$WORK/fabric-emulator"
 
 echo "==> starting entra-emulator on :$ENTRA_PORT"
 ORIGIN_MODE=compat PORT="$ENTRA_PORT" PUBLIC_ORIGIN="https://localhost:$ENTRA_PORT" \
