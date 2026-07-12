@@ -102,6 +102,18 @@ func (s *Server) registerControl() {
 		s.Vault.SetFaults(throttle, reject)
 		writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
 	})
+	// Per-principal operation allowlist ({"<principal-oid>": ["secrets/get",
+	// "keys/sign", "*"]}). Empty body or {} restores full access — honest to
+	// access-policy semantics without pretending to be ARM.
+	s.mux.HandleFunc("POST /_emulator/permissions", func(w http.ResponseWriter, r *http.Request) {
+		var perms map[string][]string
+		if err := json.NewDecoder(r.Body).Decode(&perms); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "malformed JSON"})
+			return
+		}
+		s.Vault.SetPermissions(perms)
+		writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
+	})
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

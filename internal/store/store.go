@@ -75,6 +75,29 @@ CREATE TABLE IF NOT EXISTS deleted_secrets (
 	purge_at INTEGER NOT NULL,
 	PRIMARY KEY (vault, name)
 );
+CREATE TABLE IF NOT EXISTS key_versions (
+	vault TEXT NOT NULL,
+	name TEXT NOT NULL,
+	version TEXT NOT NULL,
+	kty TEXT NOT NULL,              -- RSA | EC
+	crv TEXT NOT NULL DEFAULT '',   -- EC curve name
+	private_der TEXT NOT NULL,      -- base64(PKCS#8), never leaves the store
+	key_ops_json TEXT NOT NULL DEFAULT '[]',
+	enabled INTEGER NOT NULL DEFAULT 1,
+	nbf INTEGER,
+	exp INTEGER,
+	tags_json TEXT NOT NULL DEFAULT '{}',
+	created_at INTEGER NOT NULL,
+	updated_at INTEGER NOT NULL,
+	PRIMARY KEY (vault, name, version)
+);
+CREATE TABLE IF NOT EXISTS deleted_keys (
+	vault TEXT NOT NULL,
+	name TEXT NOT NULL,
+	deleted_at INTEGER NOT NULL,
+	purge_at INTEGER NOT NULL,
+	PRIMARY KEY (vault, name)
+);
 `)
 	return err
 }

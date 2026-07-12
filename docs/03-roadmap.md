@@ -30,12 +30,12 @@ challenge flow and round-trips secrets.
 
 ## P1 — keys (real crypto) + hardening
 
-- [ ] Keys CRUD/versions/soft-delete; RSA + EC generation (software-protected).
-- [ ] sign/verify, encrypt/decrypt, wrap/unwrap with real Go crypto — output
+- [x] Keys CRUD/versions/soft-delete; RSA + EC generation (software-protected).
+- [x] sign/verify, encrypt/decrypt, wrap/unwrap with real Go crypto — output
       verifiable against the returned JWK.
-- [ ] Optional per-principal permission map (`/_emulator/permissions`) for
+- [x] Optional per-principal permission map (`/_emulator/permissions`) for
       authorization-denied paths.
-- [ ] e2e: azkeys SDK sign → local JWK verify; encrypt → decrypt round trip.
+- [x] e2e: azkeys SDK sign → local JWK verify; encrypt → decrypt round trip.
 
 ## P2 — certificates
 

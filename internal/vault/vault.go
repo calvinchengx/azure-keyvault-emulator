@@ -27,28 +27,75 @@ type Service struct {
 	mu           sync.Mutex
 	throttleNext int // 429 + Retry-After
 	rejectNext   int // 500
+	// perms is the optional per-principal operation allowlist
+	// (/_emulator/permissions): principal id → allowed ops. A principal
+	// absent from a non-empty map (or with an empty list) is denied; an
+	// empty map means full access for everyone (the default dev posture).
+	perms map[string][]string
 }
 
 // New wires the service.
 func New(cfg *config.Config, st *store.Store, v *auth.Validator) *Service {
 	s := &Service{Store: st, Auth: v, Cfg: cfg, mux: http.NewServeMux()}
-	s.mux.HandleFunc("PUT /secrets/{name}", s.withAuth(s.setSecret))
-	s.mux.HandleFunc("GET /secrets/{name}", s.withAuth(s.getSecret))
+	s.mux.HandleFunc("PUT /secrets/{name}", s.withAuth("secrets/set", s.setSecret))
+	s.mux.HandleFunc("GET /secrets/{name}", s.withAuth("secrets/get", s.getSecret))
 	// The Azure SDK requests the unversioned get as /secrets/{name}/ — an
 	// empty version segment with a trailing slash.
-	s.mux.HandleFunc("GET /secrets/{name}/{$}", s.withAuth(s.getSecret))
-	s.mux.HandleFunc("GET /secrets/{name}/{version}", s.withAuth(s.getSecretVersion))
-	s.mux.HandleFunc("PATCH /secrets/{name}/{version}", s.withAuth(s.updateSecret))
-	s.mux.HandleFunc("GET /secrets", s.withAuth(s.listSecrets))
-	s.mux.HandleFunc("GET /secrets/{name}/versions", s.withAuth(s.listSecretVersions))
-	s.mux.HandleFunc("DELETE /secrets/{name}", s.withAuth(s.deleteSecret))
-	s.mux.HandleFunc("POST /secrets/{name}/backup", s.withAuth(s.backupSecret))
-	s.mux.HandleFunc("POST /secrets/restore", s.withAuth(s.restoreSecret))
-	s.mux.HandleFunc("GET /deletedsecrets/{name}", s.withAuth(s.getDeletedSecret))
-	s.mux.HandleFunc("GET /deletedsecrets", s.withAuth(s.listDeletedSecrets))
-	s.mux.HandleFunc("DELETE /deletedsecrets/{name}", s.withAuth(s.purgeSecret))
-	s.mux.HandleFunc("POST /deletedsecrets/{name}/recover", s.withAuth(s.recoverSecret))
+	s.mux.HandleFunc("GET /secrets/{name}/{$}", s.withAuth("secrets/get", s.getSecret))
+	s.mux.HandleFunc("GET /secrets/{name}/{version}", s.withAuth("secrets/get", s.getSecretVersion))
+	s.mux.HandleFunc("PATCH /secrets/{name}/{version}", s.withAuth("secrets/update", s.updateSecret))
+	s.mux.HandleFunc("GET /secrets", s.withAuth("secrets/list", s.listSecrets))
+	s.mux.HandleFunc("GET /secrets/{name}/versions", s.withAuth("secrets/list", s.listSecretVersions))
+	s.mux.HandleFunc("DELETE /secrets/{name}", s.withAuth("secrets/delete", s.deleteSecret))
+	s.mux.HandleFunc("POST /secrets/{name}/backup", s.withAuth("secrets/backup", s.backupSecret))
+	s.mux.HandleFunc("POST /secrets/restore", s.withAuth("secrets/restore", s.restoreSecret))
+	s.mux.HandleFunc("GET /deletedsecrets/{name}", s.withAuth("secrets/get", s.getDeletedSecret))
+	s.mux.HandleFunc("GET /deletedsecrets", s.withAuth("secrets/list", s.listDeletedSecrets))
+	s.mux.HandleFunc("DELETE /deletedsecrets/{name}", s.withAuth("secrets/purge", s.purgeSecret))
+	s.mux.HandleFunc("POST /deletedsecrets/{name}/recover", s.withAuth("secrets/recover", s.recoverSecret))
+
+	s.mux.HandleFunc("POST /keys/{name}/create", s.withAuth("keys/create", s.createKey))
+	s.mux.HandleFunc("GET /keys/{name}", s.withAuth("keys/get", s.getKey))
+	s.mux.HandleFunc("GET /keys/{name}/{$}", s.withAuth("keys/get", s.getKey))
+	s.mux.HandleFunc("GET /keys/{name}/{version}", s.withAuth("keys/get", s.getKey))
+	s.mux.HandleFunc("PATCH /keys/{name}/{version}", s.withAuth("keys/update", s.updateKey))
+	s.mux.HandleFunc("GET /keys", s.withAuth("keys/list", s.listKeys))
+	s.mux.HandleFunc("GET /keys/{name}/versions", s.withAuth("keys/list", s.listKeyVersions))
+	s.mux.HandleFunc("DELETE /keys/{name}", s.withAuth("keys/delete", s.deleteKey))
+	s.mux.HandleFunc("GET /deletedkeys/{name}", s.withAuth("keys/get", s.getDeletedKey))
+	s.mux.HandleFunc("GET /deletedkeys", s.withAuth("keys/list", s.listDeletedKeys))
+	s.mux.HandleFunc("DELETE /deletedkeys/{name}", s.withAuth("keys/purge", s.purgeKey))
+	s.mux.HandleFunc("POST /deletedkeys/{name}/recover", s.withAuth("keys/recover", s.recoverKey))
+	// Crypto operations, versioned and unversioned (the SDK's unversioned
+	// form reaches these via the double-slash rewrite in ServeHTTP).
+	for _, op := range []string{"sign", "verify", "encrypt", "decrypt", "wrapkey", "unwrapkey"} {
+		s.mux.HandleFunc("POST /keys/{name}/{version}/"+op, s.withAuth("keys/"+op, s.cryptoOp(op)))
+		s.mux.HandleFunc("POST /keys/{name}/"+op, s.withAuth("keys/"+op, s.cryptoOp(op)))
+	}
 	return s
+}
+
+// SetPermissions replaces the per-principal operation allowlist (nil or
+// empty = full access for every valid token).
+func (s *Service) SetPermissions(perms map[string][]string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.perms = perms
+}
+
+// allowed reports whether the principal may perform op.
+func (s *Service) allowed(principalID, op string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.perms) == 0 {
+		return true
+	}
+	for _, got := range s.perms[principalID] {
+		if got == op || got == "*" {
+			return true
+		}
+	}
+	return false
 }
 
 // SetFaults configures fault switches; negative values leave a field as-is.
@@ -85,9 +132,10 @@ func (s *Service) baseURL(r *http.Request) string {
 type handler func(w http.ResponseWriter, r *http.Request, vault string)
 
 // withAuth implements challenge-based authentication: a tokenless request
-// gets 401 + WWW-Authenticate advertising the (emulated) Entra authority;
-// a token is validated against that issuer's JWKS with the vault audience.
-func (s *Service) withAuth(h handler) http.HandlerFunc {
+// gets 401 + WWW-Authenticate advertising the (emulated) Entra authority; a
+// token is validated against that issuer's JWKS with the vault audience, and
+// the optional permission map gates the named operation.
+func (s *Service) withAuth(op string, h handler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("x-ms-request-id", store.NewVersionID())
 		s.mu.Lock()
@@ -112,18 +160,32 @@ func (s *Service) withAuth(h handler) http.HandlerFunc {
 			writeKVErr(w, http.StatusUnauthorized, "Unauthorized", "AKV10000: Request is missing a Bearer or PoP token.")
 			return
 		}
-		if _, err := s.Auth.ValidateRequest(r); err != nil {
+		p, err := s.Auth.ValidateRequest(r)
+		if err != nil {
 			w.Header().Set("WWW-Authenticate",
 				fmt.Sprintf(`Bearer authorization=%q, resource=%q`, s.Cfg.EntraAuthority, "https://vault.azure.net"))
 			writeKVErr(w, http.StatusUnauthorized, "Unauthorized", err.Error())
+			return
+		}
+		if !s.allowed(p.ID, op) {
+			writeKVErr(w, http.StatusForbidden, "Forbidden",
+				fmt.Sprintf("The principal is not permitted to perform %s on this vault.", op))
 			return
 		}
 		h(w, r, s.vaultName(r))
 	}
 }
 
-// ServeHTTP dispatches to the data-plane mux.
-func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) { s.mux.ServeHTTP(w, r) }
+// ServeHTTP dispatches to the data-plane mux. The Azure SDK emits an empty
+// version segment for unversioned crypto operations (/keys/{name}//sign);
+// collapse doubled slashes so those reach the version-less patterns instead
+// of ServeMux's 301 redirect (which POSTs must not follow).
+func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if strings.Contains(r.URL.Path, "//") {
+		r.URL.Path = strings.ReplaceAll(r.URL.Path, "//", "/")
+	}
+	s.mux.ServeHTTP(w, r)
+}
 
 // ---- wire shapes ----
 

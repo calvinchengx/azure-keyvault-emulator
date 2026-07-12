@@ -278,7 +278,7 @@ func TestBackupRestoreBranches(t *testing.T) {
 
 func TestChallengeAndFaults(t *testing.T) {
 	s, _ := newService(t, "")
-	h := s.withAuth(func(w http.ResponseWriter, r *http.Request, vault string) {
+	h := s.withAuth("secrets/get", func(w http.ResponseWriter, r *http.Request, vault string) {
 		w.WriteHeader(http.StatusOK)
 	})
 	// No Authorization → 401 with the challenge (nil validator never reached).
