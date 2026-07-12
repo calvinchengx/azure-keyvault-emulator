@@ -22,6 +22,12 @@ type Service struct {
 	Auth  *auth.Validator
 	Cfg   *config.Config
 	mux   *http.ServeMux
+	// certMux serves the reserved certificate sub-resources (issuers,
+	// contacts). Their fixed path segments overlap with the {name}/pending
+	// and {name}/policy certificate-operation patterns, which Go's ServeMux
+	// treats as an unresolvable conflict — so they get their own mux,
+	// dispatched by path prefix in ServeHTTP.
+	certMux *http.ServeMux
 
 	// Fault switches (set via /_emulator/faults).
 	mu           sync.Mutex
@@ -36,7 +42,7 @@ type Service struct {
 
 // New wires the service.
 func New(cfg *config.Config, st *store.Store, v *auth.Validator) *Service {
-	s := &Service{Store: st, Auth: v, Cfg: cfg, mux: http.NewServeMux()}
+	s := &Service{Store: st, Auth: v, Cfg: cfg, mux: http.NewServeMux(), certMux: http.NewServeMux()}
 	s.mux.HandleFunc("PUT /secrets/{name}", s.withAuth("secrets/set", s.setSecret))
 	s.mux.HandleFunc("GET /secrets/{name}", s.withAuth("secrets/get", s.getSecret))
 	// The Azure SDK requests the unversioned get as /secrets/{name}/ — an
@@ -55,17 +61,26 @@ func New(cfg *config.Config, st *store.Store, v *auth.Validator) *Service {
 	s.mux.HandleFunc("POST /deletedsecrets/{name}/recover", s.withAuth("secrets/recover", s.recoverSecret))
 
 	s.mux.HandleFunc("POST /keys/{name}/create", s.withAuth("keys/create", s.createKey))
+	// PUT /keys/{name} imports a caller-supplied JWK.
+	s.mux.HandleFunc("PUT /keys/{name}", s.withAuth("keys/import", s.importKey))
 	s.mux.HandleFunc("GET /keys/{name}", s.withAuth("keys/get", s.getKey))
 	s.mux.HandleFunc("GET /keys/{name}/{$}", s.withAuth("keys/get", s.getKey))
 	s.mux.HandleFunc("GET /keys/{name}/{version}", s.withAuth("keys/get", s.getKey))
 	s.mux.HandleFunc("PATCH /keys/{name}/{version}", s.withAuth("keys/update", s.updateKey))
+	s.mux.HandleFunc("PATCH /keys/{name}", s.withAuth("keys/update", s.updateKeyLatest))
 	s.mux.HandleFunc("GET /keys", s.withAuth("keys/list", s.listKeys))
 	s.mux.HandleFunc("GET /keys/{name}/versions", s.withAuth("keys/list", s.listKeyVersions))
 	s.mux.HandleFunc("DELETE /keys/{name}", s.withAuth("keys/delete", s.deleteKey))
+	s.mux.HandleFunc("POST /keys/{name}/backup", s.withAuth("keys/backup", s.backupKey))
+	s.mux.HandleFunc("POST /keys/restore", s.withAuth("keys/restore", s.restoreKey))
+	s.mux.HandleFunc("GET /keys/{name}/rotationpolicy", s.withAuth("keys/get", s.getKeyRotationPolicy))
+	s.mux.HandleFunc("PUT /keys/{name}/rotationpolicy", s.withAuth("keys/update", s.setKeyRotationPolicy))
 	s.mux.HandleFunc("GET /deletedkeys/{name}", s.withAuth("keys/get", s.getDeletedKey))
 	s.mux.HandleFunc("GET /deletedkeys", s.withAuth("keys/list", s.listDeletedKeys))
 	s.mux.HandleFunc("DELETE /deletedkeys/{name}", s.withAuth("keys/purge", s.purgeKey))
 	s.mux.HandleFunc("POST /deletedkeys/{name}/recover", s.withAuth("keys/recover", s.recoverKey))
+	// GetRandomBytes: vault-level, not tied to a key name.
+	s.mux.HandleFunc("POST /rng", s.withAuth("keys/rng", s.getRandomBytes))
 	// Crypto operations, versioned and unversioned (the SDK's unversioned
 	// form reaches these via the double-slash rewrite in ServeHTTP).
 	for _, op := range []string{"sign", "verify", "encrypt", "decrypt", "wrapkey", "unwrapkey"} {
@@ -75,12 +90,28 @@ func New(cfg *config.Config, st *store.Store, v *auth.Validator) *Service {
 
 	s.mux.HandleFunc("POST /certificates/{name}/create", s.withAuth("certificates/create", s.createCertificate))
 	s.mux.HandleFunc("POST /certificates/{name}/import", s.withAuth("certificates/import", s.importCertificate))
+	s.mux.HandleFunc("POST /certificates/{name}/backup", s.withAuth("certificates/backup", s.backupCertificate))
+	s.mux.HandleFunc("POST /certificates/restore", s.withAuth("certificates/restore", s.restoreCertificate))
 	s.mux.HandleFunc("GET /certificates/{name}/pending", s.withAuth("certificates/get", s.getCertificateOperation))
 	s.mux.HandleFunc("GET /certificates/{name}/policy", s.withAuth("certificates/get", s.getCertificatePolicy))
+	s.mux.HandleFunc("PATCH /certificates/{name}/policy", s.withAuth("certificates/update", s.updateCertificatePolicy))
 	s.mux.HandleFunc("GET /certificates/{name}/versions", s.withAuth("certificates/list", s.listCertificateVersions))
+	// Certificate issuers and contacts (vault-scoped sub-resources) live on
+	// certMux — see the field comment for why they can't share s.mux.
+	s.certMux.HandleFunc("GET /certificates/issuers", s.withAuth("certificates/list", s.listCertIssuers))
+	s.certMux.HandleFunc("GET /certificates/issuers/{$}", s.withAuth("certificates/list", s.listCertIssuers))
+	s.certMux.HandleFunc("PUT /certificates/issuers/{name}", s.withAuth("certificates/setissuers", s.setCertIssuer))
+	s.certMux.HandleFunc("GET /certificates/issuers/{name}", s.withAuth("certificates/getissuers", s.getCertIssuer))
+	s.certMux.HandleFunc("PATCH /certificates/issuers/{name}", s.withAuth("certificates/setissuers", s.setCertIssuer))
+	s.certMux.HandleFunc("DELETE /certificates/issuers/{name}", s.withAuth("certificates/deleteissuers", s.deleteCertIssuer))
+	s.certMux.HandleFunc("PUT /certificates/contacts", s.withAuth("certificates/setcontacts", s.setCertContacts))
+	s.certMux.HandleFunc("GET /certificates/contacts", s.withAuth("certificates/getcontacts", s.getCertContacts))
+	s.certMux.HandleFunc("DELETE /certificates/contacts", s.withAuth("certificates/deletecontacts", s.deleteCertContacts))
 	s.mux.HandleFunc("GET /certificates/{name}", s.withAuth("certificates/get", s.getCertificate))
 	s.mux.HandleFunc("GET /certificates/{name}/{$}", s.withAuth("certificates/get", s.getCertificate))
 	s.mux.HandleFunc("GET /certificates/{name}/{version}", s.withAuth("certificates/get", s.getCertificate))
+	s.mux.HandleFunc("PATCH /certificates/{name}/{version}", s.withAuth("certificates/update", s.updateCertificate))
+	s.mux.HandleFunc("PATCH /certificates/{name}", s.withAuth("certificates/update", s.updateCertificate))
 	s.mux.HandleFunc("GET /certificates", s.withAuth("certificates/list", s.listCertificates))
 	s.mux.HandleFunc("DELETE /certificates/{name}", s.withAuth("certificates/delete", s.deleteCertificate))
 	s.mux.HandleFunc("GET /deletedcertificates/{name}", s.withAuth("certificates/get", s.getDeletedCertificate))
@@ -198,6 +229,14 @@ func (s *Service) withAuth(op string, h handler) http.HandlerFunc {
 func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if strings.Contains(r.URL.Path, "//") {
 		r.URL.Path = strings.ReplaceAll(r.URL.Path, "//", "/")
+	}
+	// Reserved certificate sub-resources route to certMux (they can't share
+	// s.mux — see the certMux field comment).
+	p := r.URL.Path
+	if p == "/certificates/issuers" || strings.HasPrefix(p, "/certificates/issuers/") ||
+		p == "/certificates/contacts" {
+		s.certMux.ServeHTTP(w, r)
+		return
 	}
 	s.mux.ServeHTTP(w, r)
 }

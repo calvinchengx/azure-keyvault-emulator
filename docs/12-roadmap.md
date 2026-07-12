@@ -63,10 +63,34 @@ challenge flow and round-trips secrets.
 - [x] Compose file with all three emulators (`docker-compose.yml`, `full`
       profile adds fabric).
 
+## P4 — SDK parity surface
+
+Round out the secondary operations the Azure SDKs expose beyond core CRUD, so a
+test written against `azkeys` / `azcertificates` never hits an endpoint the
+emulator lacks. Measured against the reference
+[james-gould emulator](https://github.com/james-gould/azure-keyvault-emulator);
+we keep our real-auth and real-crypto posture throughout.
+
+- [x] Keys: **import** a caller-supplied JWK (`PUT /keys/{name}`, real RSA/EC
+      material — a subsequent sign/verify round-trips), update-latest
+      (`PATCH /keys/{name}`), **backup/restore**, and **rotation policy**
+      get/set.
+- [x] **GetRandomBytes** (`POST /rng`).
+- [x] Certificates: **backup/restore**, update attributes/policy
+      (`PATCH /certificates/{name}`), policy update
+      (`PATCH /certificates/{name}/policy`), **issuers**
+      (`GET`/`PUT`/`PATCH`/`DELETE /certificates/issuers/{name}` + list) and
+      **contacts** (`GET`/`PUT`/`DELETE /certificates/contacts`).
+- Intentional non-goals (documented, not gaps): **key release** (SKR needs an
+      attestation authority) and **certificate CSR merge** (a CA-signed flow) —
+      both out of scope for a self-signed, offline emulator, matching the
+      existing "Self issuer only" boundary.
+
 ## Cross-cutting (throughout)
 
 - [x] CI: vet/build/test + 90% coverage floor + the three-emulator chain e2e.
-- [ ] Starlight docs site on GitHub Pages (`/docs` = source of truth).
+- [x] Starlight docs site on GitHub Pages (`/docs` = source of truth),
+      live at <https://calvinchengx.github.io/azure-keyvault-emulator/>.
 - [x] GoReleaser: binaries + distroless Docker (GHCR) + Homebrew + winget
       (released as **v0.1.0**).
 - [ ] Svelte portal (vaults/secrets/deleted/clock views) — after the API

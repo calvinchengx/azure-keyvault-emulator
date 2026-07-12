@@ -121,6 +121,24 @@ CREATE TABLE IF NOT EXISTS deleted_certs (
 	purge_at INTEGER NOT NULL,
 	PRIMARY KEY (vault, name)
 );
+CREATE TABLE IF NOT EXISTS key_rotation_policies (
+	vault TEXT NOT NULL,
+	name TEXT NOT NULL,
+	policy_json TEXT NOT NULL,
+	updated_at INTEGER NOT NULL,
+	PRIMARY KEY (vault, name)
+);
+CREATE TABLE IF NOT EXISTS cert_issuers (
+	vault TEXT NOT NULL,
+	name TEXT NOT NULL,
+	issuer_json TEXT NOT NULL,
+	PRIMARY KEY (vault, name)
+);
+CREATE TABLE IF NOT EXISTS cert_contacts (
+	vault TEXT NOT NULL,
+	contacts_json TEXT NOT NULL,
+	PRIMARY KEY (vault)
+);
 `)
 	return err
 }

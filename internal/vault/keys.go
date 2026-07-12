@@ -161,6 +161,12 @@ func (s *Service) updateKey(w http.ResponseWriter, r *http.Request, vault string
 		writeKVErr(w, http.StatusInternalServerError, "InternalServerError", err.Error())
 		return
 	}
+	s.patchKey(w, r, v)
+}
+
+// patchKey applies an attribute/ops/tag PATCH body to an already-resolved key
+// version and writes the bundle. Shared by the versioned and latest forms.
+func (s *Service) patchKey(w http.ResponseWriter, r *http.Request, v *store.KeyVersion) {
 	var body struct {
 		KeyOps     []string          `json:"key_ops"`
 		Attributes *attributes       `json:"attributes"`

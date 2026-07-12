@@ -70,6 +70,123 @@ func parseKey(privateDER string) (any, error) {
 
 func b64u(b []byte) string { return base64.RawURLEncoding.EncodeToString(b) }
 
+// b64uDecode tolerantly decodes base64url, with or without padding — JWK
+// members are unpadded, but some clients pad them.
+func b64uDecode(s string) ([]byte, error) {
+	if b, err := base64.RawURLEncoding.DecodeString(s); err == nil {
+		return b, nil
+	}
+	return base64.URLEncoding.DecodeString(s)
+}
+
+// jwkImport is the private JWK the import-key call carries (RFC 7517 members).
+type jwkImport struct {
+	Kty    string   `json:"kty"`
+	Crv    string   `json:"crv"`
+	N      string   `json:"n"`
+	E      string   `json:"e"`
+	D      string   `json:"d"`
+	P      string   `json:"p"`
+	Q      string   `json:"q"`
+	X      string   `json:"x"`
+	Y      string   `json:"y"`
+	KeyOps []string `json:"key_ops"`
+}
+
+// ktyOf reports "RSA" or "EC" for a parsed private key (empty for neither).
+func ktyOf(priv any) string {
+	switch priv.(type) {
+	case *rsa.PrivateKey:
+		return "RSA"
+	case *ecdsa.PrivateKey:
+		return "EC"
+	}
+	return ""
+}
+
+// importJWK reconstructs a private key from a JWK and returns base64(PKCS#8)
+// plus the normalized kty and curve. RSA needs n/e/d/p/q; EC needs crv/x/y/d.
+func importJWK(j jwkImport) (privateDER, kty, crv string, err error) {
+	switch normalizeKty(j.Kty) {
+	case "RSA":
+		mods := map[string]string{"n": j.N, "e": j.E, "d": j.D, "p": j.P, "q": j.Q}
+		vals := map[string]*big.Int{}
+		for name, s := range mods {
+			if s == "" {
+				return "", "", "", fmt.Errorf("RSA import requires the %q member", name)
+			}
+			b, derr := b64uDecode(s)
+			if derr != nil {
+				return "", "", "", fmt.Errorf("member %q is not valid base64url", name)
+			}
+			vals[name] = new(big.Int).SetBytes(b)
+		}
+		priv := &rsa.PrivateKey{
+			PublicKey: rsa.PublicKey{N: vals["n"], E: int(vals["e"].Int64())},
+			D:         vals["d"],
+			Primes:    []*big.Int{vals["p"], vals["q"]},
+		}
+		priv.Precompute()
+		if verr := priv.Validate(); verr != nil {
+			return "", "", "", fmt.Errorf("invalid RSA key material: %w", verr)
+		}
+		der, merr := x509.MarshalPKCS8PrivateKey(priv)
+		if merr != nil {
+			return "", "", "", merr
+		}
+		return base64.StdEncoding.EncodeToString(der), "RSA", "", nil
+	case "EC":
+		var curve elliptic.Curve
+		switch j.Crv {
+		case "P-256":
+			curve = elliptic.P256()
+		case "P-384":
+			curve = elliptic.P384()
+		case "P-521":
+			curve = elliptic.P521()
+		default:
+			return "", "", "", fmt.Errorf("unsupported curve %q", j.Crv)
+		}
+		mods := map[string]string{"x": j.X, "y": j.Y, "d": j.D}
+		vals := map[string]*big.Int{}
+		for name, s := range mods {
+			if s == "" {
+				return "", "", "", fmt.Errorf("EC import requires the %q member", name)
+			}
+			b, derr := b64uDecode(s)
+			if derr != nil {
+				return "", "", "", fmt.Errorf("member %q is not valid base64url", name)
+			}
+			vals[name] = new(big.Int).SetBytes(b)
+		}
+		priv := &ecdsa.PrivateKey{D: vals["d"]}
+		priv.PublicKey.Curve = curve
+		priv.PublicKey.X, priv.PublicKey.Y = vals["x"], vals["y"]
+		if !curve.IsOnCurve(priv.PublicKey.X, priv.PublicKey.Y) {
+			return "", "", "", fmt.Errorf("EC public point is not on curve %s", j.Crv)
+		}
+		der, merr := x509.MarshalPKCS8PrivateKey(priv)
+		if merr != nil {
+			return "", "", "", merr
+		}
+		return base64.StdEncoding.EncodeToString(der), "EC", j.Crv, nil
+	}
+	return "", "", "", fmt.Errorf("unsupported kty %q", j.Kty)
+}
+
+// randomBytes returns count cryptographically-random bytes (1..128, the
+// service limit).
+func randomBytes(count int) ([]byte, error) {
+	if count < 1 || count > 128 {
+		return nil, fmt.Errorf("count must be between 1 and 128")
+	}
+	b := make([]byte, count)
+	if _, err := rand.Read(b); err != nil {
+		return nil, err
+	}
+	return b, nil
+}
+
 // publicJWK renders the public portion (n/e or crv/x/y) — never the private.
 func publicJWK(priv any, kid, kty string, keyOps []string) (map[string]any, error) {
 	jwk := map[string]any{"kid": kid, "kty": kty, "key_ops": keyOps}

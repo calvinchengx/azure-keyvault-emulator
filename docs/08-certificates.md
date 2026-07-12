@@ -13,10 +13,24 @@ supported. Same versioning + soft-delete skeleton as
 | `POST /certificates/{name}/import` | import a base64 PKCS#12 (PFX) or PEM bundle |
 | `GET /certificates/{name}/pending` | the certificate operation (poll) |
 | `GET /certificates/{name}` \| `/certificates/{name}/{version}` | get the certificate bundle |
-| `GET /certificates/{name}/policy` | the certificate policy |
+| `PATCH /certificates/{name}` \| `/certificates/{name}/{version}` | update attributes/tags (and policy if supplied) |
+| `GET` \| `PATCH /certificates/{name}/policy` | get / update the certificate policy |
 | `GET /certificates` \| `/certificates/{name}/versions` | list (paged) |
 | `DELETE /certificates/{name}` | soft-delete |
+| `POST /certificates/{name}/backup` · `POST /certificates/restore` | opaque backup blob → restore into an empty name |
 | `GET/DELETE /deletedcertificates/{name}`, `GET /deletedcertificates`, `POST /deletedcertificates/{name}/recover` | deleted-certificate lifecycle |
+
+### Issuers and contacts (vault-scoped)
+
+| Method + path | Purpose |
+|---|---|
+| `GET /certificates/issuers` | list issuers (paged) |
+| `GET` \| `PUT` \| `PATCH` \| `DELETE /certificates/issuers/{name}` | manage a named issuer (opaque document round-tripped) |
+| `GET` \| `PUT` \| `DELETE /certificates/contacts` | manage the vault's contact list |
+
+These are administrative side objects the SDK manages alongside certificates;
+the emulator round-trips the SDK's own document shape. They do **not** drive
+issuance — only the `Self` issuer produces certificates (see below).
 
 ## Issuance
 

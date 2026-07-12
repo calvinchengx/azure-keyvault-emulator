@@ -10,11 +10,20 @@ Software-protected only (no HSM).
 | Method + path | Purpose |
 |---|---|
 | `POST /keys/{name}/create` | create — `{kty, key_size?/crv?, key_ops?, attributes?, tags?}` → key bundle |
+| `PUT /keys/{name}` | **import** a caller-supplied JWK (`{key:{kty,…private members}, attributes?, tags?}`) |
 | `GET /keys/{name}` \| `/keys/{name}/{version}` | get the public JWK |
-| `PATCH /keys/{name}/{version}` | update `key_ops`/attributes/tags |
+| `PATCH /keys/{name}/{version}` \| `/keys/{name}` | update `key_ops`/attributes/tags (versioned or latest) |
 | `GET /keys` \| `/keys/{name}/versions` | list (paged) |
 | `DELETE /keys/{name}` | soft-delete |
+| `POST /keys/{name}/backup` · `POST /keys/restore` | opaque backup blob (all versions) → restore into an empty name |
+| `GET` \| `PUT /keys/{name}/rotationpolicy` | rotation policy (round-tripped; unset returns the disabled-rotation default) |
 | `GET/DELETE /deletedkeys/{name}`, `GET /deletedkeys`, `POST /deletedkeys/{name}/recover` | deleted-key lifecycle |
+| `POST /rng` | `{count}` (1–128) → `{value}` cryptographically-random base64url bytes |
+
+**Import** reconstructs a real key from the JWK's private members (RSA
+`n/e/d/p/q`, EC `crv/x/y/d`); the material is validated (RSA CRT check, EC
+on-curve check) and a subsequent `sign` verifies against the returned public
+JWK — the same interop guarantee as generated keys.
 
 ### Cryptographic operations
 
