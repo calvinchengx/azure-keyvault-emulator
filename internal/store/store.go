@@ -98,6 +98,29 @@ CREATE TABLE IF NOT EXISTS deleted_keys (
 	purge_at INTEGER NOT NULL,
 	PRIMARY KEY (vault, name)
 );
+CREATE TABLE IF NOT EXISTS cert_versions (
+	vault TEXT NOT NULL,
+	name TEXT NOT NULL,
+	version TEXT NOT NULL,
+	cer_der TEXT NOT NULL,          -- base64(DER) of the X.509 cert
+	private_der TEXT NOT NULL,      -- base64(PKCS#8) private key, never returned
+	policy_json TEXT NOT NULL DEFAULT '{}',
+	thumbprint TEXT NOT NULL DEFAULT '',
+	enabled INTEGER NOT NULL DEFAULT 1,
+	nbf INTEGER,
+	exp INTEGER,
+	tags_json TEXT NOT NULL DEFAULT '{}',
+	created_at INTEGER NOT NULL,
+	updated_at INTEGER NOT NULL,
+	PRIMARY KEY (vault, name, version)
+);
+CREATE TABLE IF NOT EXISTS deleted_certs (
+	vault TEXT NOT NULL,
+	name TEXT NOT NULL,
+	deleted_at INTEGER NOT NULL,
+	purge_at INTEGER NOT NULL,
+	PRIMARY KEY (vault, name)
+);
 `)
 	return err
 }

@@ -72,6 +72,21 @@ func New(cfg *config.Config, st *store.Store, v *auth.Validator) *Service {
 		s.mux.HandleFunc("POST /keys/{name}/{version}/"+op, s.withAuth("keys/"+op, s.cryptoOp(op)))
 		s.mux.HandleFunc("POST /keys/{name}/"+op, s.withAuth("keys/"+op, s.cryptoOp(op)))
 	}
+
+	s.mux.HandleFunc("POST /certificates/{name}/create", s.withAuth("certificates/create", s.createCertificate))
+	s.mux.HandleFunc("POST /certificates/{name}/import", s.withAuth("certificates/import", s.importCertificate))
+	s.mux.HandleFunc("GET /certificates/{name}/pending", s.withAuth("certificates/get", s.getCertificateOperation))
+	s.mux.HandleFunc("GET /certificates/{name}/policy", s.withAuth("certificates/get", s.getCertificatePolicy))
+	s.mux.HandleFunc("GET /certificates/{name}/versions", s.withAuth("certificates/list", s.listCertificateVersions))
+	s.mux.HandleFunc("GET /certificates/{name}", s.withAuth("certificates/get", s.getCertificate))
+	s.mux.HandleFunc("GET /certificates/{name}/{$}", s.withAuth("certificates/get", s.getCertificate))
+	s.mux.HandleFunc("GET /certificates/{name}/{version}", s.withAuth("certificates/get", s.getCertificate))
+	s.mux.HandleFunc("GET /certificates", s.withAuth("certificates/list", s.listCertificates))
+	s.mux.HandleFunc("DELETE /certificates/{name}", s.withAuth("certificates/delete", s.deleteCertificate))
+	s.mux.HandleFunc("GET /deletedcertificates/{name}", s.withAuth("certificates/get", s.getDeletedCertificate))
+	s.mux.HandleFunc("GET /deletedcertificates", s.withAuth("certificates/list", s.listDeletedCertificates))
+	s.mux.HandleFunc("DELETE /deletedcertificates/{name}", s.withAuth("certificates/purge", s.purgeCertificate))
+	s.mux.HandleFunc("POST /deletedcertificates/{name}/recover", s.withAuth("certificates/recover", s.recoverCertificate))
 	return s
 }
 

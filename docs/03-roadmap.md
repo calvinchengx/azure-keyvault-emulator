@@ -39,9 +39,9 @@ challenge flow and round-trips secrets.
 
 ## P2 — certificates
 
-- [ ] Certificates CRUD + policy; self-signed issuance; PFX/PEM import;
+- [x] Certificates CRUD + policy; self-signed issuance; PFX/PEM import;
       linked key/secret materialization under the same name.
-- [ ] e2e: azcertificates SDK create-self-signed → fetch → TLS-use the cert.
+- [x] e2e: azcertificates SDK create-self-signed → fetch → TLS-use the cert.
 
 ## P3 — family integration
 
