@@ -1,0 +1,13 @@
+# Runtime state
+data/
+*.log
+
+# Node
+node_modules/
+
+# Local tooling
+.claude/
+.nwave/
+
+# GoReleaser build output
+/dist/

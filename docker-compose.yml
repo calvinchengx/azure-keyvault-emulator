@@ -1,0 +1,33 @@
+# The trust pair: entra-emulator issues vault-audience tokens, the keyvault
+# emulator's 401 challenge advertises entra's authority, and every token is
+# validated against entra's JWKS — the same handshake as production Azure.
+services:
+  entra-emulator:
+    image: ghcr.io/calvinchengx/entra-emulator:latest
+    environment:
+      ORIGIN_MODE: compat
+      PUBLIC_ORIGIN: "https://entra-emulator:8443"
+    ports:
+      - "8443:8443"
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/entra-emulator", "healthcheck"]
+      interval: 5s
+      timeout: 2s
+      retries: 10
+
+  keyvault-emulator:
+    image: ghcr.io/calvinchengx/azure-keyvault-emulator:latest
+    depends_on:
+      entra-emulator:
+        condition: service_healthy
+    ports:
+      - "8444:8444"
+    environment:
+      # The authority the 401 challenge advertises, and the issuer/JWKS
+      # tokens are validated against. 11111111-… is entra's seeded tenant.
+      KV_ENTRA_ISSUER: "https://entra-emulator:8443/11111111-1111-1111-1111-111111111111/v2.0"
+      KV_ENTRA_TLS_INSECURE: "true"
+      # Seed a resource app with appIdUri https://vault.azure.net in entra at
+      # startup so client-credentials scope resolution mints vault-audience
+      # tokens (until entra ships the built-in carve-out).
+      KV_SEED_ENTRA_RESOURCE_APP: "true"
