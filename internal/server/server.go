@@ -39,6 +39,7 @@ func New(cfg *config.Config, jwksClient *http.Client) (*Server, error) {
 		writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "now": ck.Now()})
 	})
 	s.registerControl()
+	s.registerPortal()
 	s.mux.Handle("/", kv)
 	return s, nil
 }

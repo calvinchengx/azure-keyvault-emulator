@@ -61,6 +61,10 @@ Install: `go install github.com/calvinchengx/azure-keyvault-emulator/cmd/azure-k
 `ghcr.io/calvinchengx/azure-keyvault-emulator` image (see
 [`docker-compose.yml`](docker-compose.yml) for the entra-emulator pairing).
 
+A read-only **operator portal** (dashboard, object browsers, clock + fault
+controls) is embedded in the binary and served at
+`http://localhost:8444/_emulator/portal/` — no extra process.
+
 Docs: <https://calvinchengx.github.io/azure-keyvault-emulator/> — start with
 the [Quickstart](docs/01-quickstart.md), then
 [Architecture](docs/03-architecture.md), the data-plane reference

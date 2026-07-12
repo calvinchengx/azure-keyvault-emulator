@@ -9,6 +9,8 @@
   "scripts": {
     "preinstall": "npx only-allow pnpm",
     "docs:dev": "pnpm --filter azure-keyvault-emulator-docs dev",
-    "docs:build": "pnpm --filter azure-keyvault-emulator-docs build"
+    "docs:build": "pnpm --filter azure-keyvault-emulator-docs build",
+    "portal:dev": "pnpm --filter azure-keyvault-emulator-portal dev",
+    "portal:build": "pnpm --filter azure-keyvault-emulator-portal build"
   }
 }

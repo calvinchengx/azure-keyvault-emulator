@@ -98,8 +98,11 @@ we keep our real-auth and real-crypto posture throughout.
       live at <https://calvinchengx.github.io/azure-keyvault-emulator/>.
 - [x] GoReleaser: binaries + distroless Docker (GHCR) + Homebrew + winget
       (released as **v0.1.0**).
-- [ ] Svelte portal (vaults/secrets/deleted/clock views) — after the API
-      stabilizes, mirroring the family pattern.
+- [x] **Svelte operator portal** (dashboard, secrets/keys/certificates/deleted
+      views, clock + fault-injection controls) — Svelte 5, built to a committed
+      `portal/dist`, embedded via `go:embed`, served at `/_emulator/portal/`,
+      with a CI drift guard + Playwright mount smoke. Mirrors the family
+      pattern.
 
 ## Sequencing note
 

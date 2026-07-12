@@ -116,6 +116,18 @@ through ARM — which the emulator does not model. Instead:
   to test authorization-denied paths — honest to access-policy *semantics*
   without pretending to be ARM.
 
+## Operator portal
+
+A read-only Svelte 5 SPA ships **inside the binary** (`go:embed` over a
+committed `portal/dist`) and is served at `/_emulator/portal/` — separate from
+the bearer-authenticated data plane, which owns the root path namespace. It
+shows the dashboard and per-type object lists (secrets, keys, certificates,
+deleted), and drives the clock and fault-injection controls. It reads state
+through the unauthenticated `/_emulator/portal/data/*` endpoints (a
+local-tooling escape hatch, never impersonating a principal) and aggregates
+across every vault. CI builds it from source, guards `portal/dist` against
+drift, and runs a Playwright mount smoke.
+
 ## Non-goals
 
 The ARM control plane, Managed HSM, private endpoints / firewall enforcement,
