@@ -8,7 +8,7 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azcertificates v1.5.0
 	github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azkeys v1.5.0
 	github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azsecrets v1.5.0
-	github.com/calvinchengx/entra-emulator v0.2.0
+	github.com/calvinchengx/entra-emulator v0.2.1
 	modernc.org/sqlite v1.53.0
 	software.sslmate.com/src/go-pkcs12 v0.7.3
 )

@@ -24,3 +24,16 @@ jobs:
           total=$(go tool cover -func=cover.out | tail -1 | awk '{print $3}' | tr -d '%')
           echo "total coverage: ${total}%"
           awk -v t="$total" 'BEGIN { exit (t < 90) ? 1 : 0 }'
+
+  chain:
+    name: Three-emulator secret-as-SP-credential chain
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.25'
+      # Installs entra + fabric (go install), builds this emulator, and walks
+      # vault secret → managed identity → entra token → fabric — three real
+      # processes, all on the production trust relationships.
+      - run: ./e2e/chain/run.sh

@@ -45,26 +45,30 @@ challenge flow and round-trips secrets.
 
 ## P3 — family integration
 
-- [ ] fabric-emulator **AKV-reference connections** resolve against this
-      emulator (its roadmap item): `workspace identity → entra token →
-      vault secret → connection`, fully offline.
-- [ ] e2e: the **secret-as-SP-credential chain** — the canonical "SP secret
-      lives in Key Vault" pattern, across all three emulators: an app uses
-      managed identity (entra `/msi/token`) to read a client_secret from this
-      vault, exchanges it via client credentials at entra for a
-      Fabric-audience token, and calls fabric-emulator. Every hop uses the
-      production trust relationship; a wrong or expired vault secret breaks
-      the chain exactly where it would in Azure.
-- [ ] entra-emulator enhancement: add `https://vault.azure.net` to its
-      known-resource carve-outs so client-credentials scope resolution works
-      without seeding a resource app.
-- [ ] Compose file with all three emulators.
+- [x] fabric-emulator **AKV-reference connections** resolve against this
+      emulator (its roadmap item, built on the fabric side): `workspace
+      identity → entra token → vault secret → connection`, fully offline.
+- [x] e2e: the **secret-as-SP-credential chain** — the canonical "SP secret
+      lives in Key Vault" pattern across all three emulators
+      (`e2e/chain/run.sh`, in CI): a client-credentials call stores an SP
+      secret in the vault, a **managed-identity** token (entra `/msi/token`,
+      no credential in the workload) reads it back, that secret authenticates
+      the SP to entra for a Fabric-audience token, and the token calls
+      fabric-emulator. Three real processes; a wrong secret breaks the chain
+      exactly where it would in Azure.
+- [x] entra-emulator enhancement (shipped in **entra v0.2.1**): recognize
+      `https://vault.azure.net` (+ Storage, ARM) as well-known Azure
+      resources, so client-credentials/MSI resolve the vault audience without
+      seeding a resource app.
+- [x] Compose file with all three emulators (`docker-compose.yml`, `full`
+      profile adds fabric).
 
 ## Cross-cutting (throughout)
 
-- [x] CI: vet/build/test + 90% coverage floor from the first code commit.
+- [x] CI: vet/build/test + 90% coverage floor + the three-emulator chain e2e.
 - [ ] Starlight docs site on GitHub Pages (`/docs` = source of truth).
-- [ ] GoReleaser: binaries + distroless Docker (GHCR) + Homebrew + winget.
+- [x] GoReleaser: binaries + distroless Docker (GHCR) + Homebrew + winget
+      (released as **v0.1.0**).
 - [ ] Svelte portal (vaults/secrets/deleted/clock views) — after the API
       stabilizes, mirroring the family pattern.
 

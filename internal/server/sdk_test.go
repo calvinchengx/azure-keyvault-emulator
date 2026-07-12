@@ -58,21 +58,10 @@ func (c *combinedTransport) Do(req *http.Request) (*http.Response, error) {
 
 func newFixture(t *testing.T) *fixture {
 	t.Helper()
+	// entra-emulator v0.2.1+ recognizes https://vault.azure.net as a
+	// well-known Azure resource, so client-credentials resolves the vault
+	// audience with no resource-app seed step.
 	emu := entra.StartT(t, entra.WithTLS())
-
-	// Register the Key Vault resource app so client-credentials scope
-	// https://vault.azure.net/.default resolves (the compose-seed step).
-	body, _ := json.Marshal(map[string]any{
-		"displayName": "Azure Key Vault", "appIdUri": "https://vault.azure.net", "isConfidential": true,
-	})
-	resp, err := emu.HTTPClient().Post(emu.Origin+"/admin/api/apps", "application/json", bytes.NewReader(body))
-	if err != nil {
-		t.Fatal(err)
-	}
-	resp.Body.Close()
-	if resp.StatusCode >= 300 {
-		t.Fatalf("seed resource app: %d", resp.StatusCode)
-	}
 
 	cfg := &config.Config{
 		EntraIssuer:             emu.Origin + "/" + emu.TenantID + "/v2.0",
