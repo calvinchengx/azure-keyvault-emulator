@@ -1,0 +1,101 @@
+# GoReleaser builds the cross-platform release binaries.
+# Run locally with `goreleaser release --snapshot --clean`.
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: azure-keyvault-emulator
+    main: ./cmd/azure-keyvault-emulator
+    binary: azure-keyvault-emulator
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+
+archives:
+  - formats: [tar.gz]
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+
+checksum:
+  name_template: checksums.txt
+
+# Homebrew tap: on each tag GoReleaser generates a cask and commits it to
+# calvinchengx/homebrew-tap, so `brew install
+# calvinchengx/tap/azure-keyvault-emulator` works. Pushing to a separate repo
+# needs a HOMEBREW_TAP_TOKEN with write access; if it is absent the step
+# self-skips rather than failing the release.
+homebrew_casks:
+  - name: azure-keyvault-emulator
+    repository:
+      owner: calvinchengx
+      name: homebrew-tap
+      branch: main
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    homepage: "https://github.com/calvinchengx/azure-keyvault-emulator"
+    description: "A local emulator of the Azure Key Vault data plane with real challenge-based authentication, in a single Go binary."
+    skip_upload: '{{ if index .Env "HOMEBREW_TAP_TOKEN" }}false{{ else }}true{{ end }}'
+    commit_author:
+      name: Calvin Cheng
+      email: calvin@calvinx.com
+    hooks:
+      post:
+        install: |
+          if system_command("/usr/bin/xattr", args: ["-h"]).exit_status == 0
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/azure-keyvault-emulator"]
+          end
+
+# winget: on each tag GoReleaser opens a manifest PR against microsoft/winget-pkgs
+# from a calvinchengx/winget-pkgs fork. Needs a WINGET_TOKEN; self-skips if absent.
+winget:
+  - name: azure-keyvault-emulator
+    publisher: calvinchengx
+    package_identifier: calvinchengx.azure-keyvault-emulator
+    license: Apache-2.0
+    homepage: "https://github.com/calvinchengx/azure-keyvault-emulator"
+    short_description: "A local emulator of the Azure Key Vault data plane with real challenge-based authentication."
+    description: |
+      Azure Key Vault Emulator is a local, SDK-compatible emulator of the Azure
+      Key Vault data plane (secrets, keys, certificates) in a single Go binary.
+      Unlike pass-through emulators it validates Entra bearer tokens for real —
+      the 401 challenge advertises an Entra authority and tokens are checked for
+      signature, issuer, vault audience, and expiry — so DefaultAzureCredential
+      walks the same path it walks in production. Local development tool only.
+    release_notes_url: "https://github.com/calvinchengx/azure-keyvault-emulator/releases/tag/{{ .Tag }}"
+    tags:
+      - azure
+      - key-vault
+      - secrets
+      - certificates
+      - emulator
+    repository:
+      owner: calvinchengx
+      name: winget-pkgs
+      branch: "azure-keyvault-emulator-{{ .Version }}"
+      token: "{{ .Env.WINGET_TOKEN }}"
+      pull_request:
+        enabled: true
+        draft: false
+        base:
+          owner: microsoft
+          name: winget-pkgs
+          branch: master
+    skip_upload: '{{ if index .Env "WINGET_TOKEN" }}false{{ else }}true{{ end }}'
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"

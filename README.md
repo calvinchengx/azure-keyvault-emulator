@@ -48,7 +48,20 @@ would against real Azure.
 
 ## Status
 
-Design phase. See [docs/01-architecture.md](docs/01-architecture.md),
+**Working** — secrets, keys (real RSA/EC cryptography), and certificates
+(self-signed + PFX/PEM import) are shipped, each verified end-to-end by the
+real Azure SDK (`azsecrets` / `azkeys` / `azcertificates`) completing
+challenge-based authentication against an in-process entra-emulator. Soft
+delete, versioning, backup/restore, and an optional per-principal permission
+map are in. Every package covers itself; 90%+ total with a CI floor.
+
+Install: `go install github.com/calvinchengx/azure-keyvault-emulator/cmd/azure-keyvault-emulator@latest`,
+`brew install calvinchengx/tap/azure-keyvault-emulator`,
+`winget install calvinchengx.azure-keyvault-emulator`, or the
+`ghcr.io/calvinchengx/azure-keyvault-emulator` image (see
+[`docker-compose.yml`](docker-compose.yml) for the entra-emulator pairing).
+
+See [docs/01-architecture.md](docs/01-architecture.md),
 [docs/02-api-surface.md](docs/02-api-surface.md), and
 [docs/03-roadmap.md](docs/03-roadmap.md).
 
