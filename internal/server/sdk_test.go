@@ -28,9 +28,9 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azsecrets"
-	entra "github.com/calvinchengx/entra-emulator/emulator"
 	"github.com/calvinchengx/azure-keyvault-emulator/internal/config"
 	"github.com/calvinchengx/azure-keyvault-emulator/internal/server"
+	entra "github.com/calvinchengx/entra-emulator/emulator"
 )
 
 type fixture struct {

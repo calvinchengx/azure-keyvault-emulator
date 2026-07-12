@@ -8,21 +8,21 @@ e2e-verified, ≥90% coverage floor in CI from the first commit.
 The core value: an Azure SDK acquires a token from entra-emulator via the
 challenge flow and round-trips secrets.
 
-- [ ] Foundations: clock, config (`KV_*` env + flags), store (vault, secret,
+- [x] Foundations: clock, config (`KV_*` env + flags), store (vault, secret,
       secret_version, deleted_secret), self-signed TLS (`*.vault.azure.net`),
       Host-routed vault resolution + default seeded vault.
-- [ ] Auth: challenge `401` advertising the entra authority; RS256 validation
+- [x] Auth: challenge `401` advertising the entra authority; RS256 validation
       against entra JWKS (issuer, vault audience, clock-based expiry).
       Reuses the validator pattern from fabric-emulator's `internal/auth`.
-- [ ] Secrets: set/get/get-version/patch/list/list-versions (paged),
+- [x] Secrets: set/get/get-version/patch/list/list-versions (paged),
       new-version-per-PUT, `enabled` gating, informational `nbf`/`exp`,
       backup/restore.
-- [ ] Soft delete: delete → deleted state with `scheduledPurgeDate` on the
+- [x] Soft delete: delete → deleted state with `scheduledPurgeDate` on the
       clock; recover; purge; name-reuse conflict while deleted.
-- [ ] `/_emulator` clock + faults (incl. 429 throttling injection).
-- [ ] Docker (distroless) + docker-compose with entra-emulator (challenge
+- [x] `/_emulator` clock + faults (incl. 429 throttling injection).
+- [x] Docker (distroless) + docker-compose with entra-emulator (challenge
       authority pre-wired; vault resource app seeded via entra's admin API).
-- [ ] e2e (in-process entra, like fabric-emulator's fixture): **azsecrets +
+- [x] e2e (in-process entra, like fabric-emulator's fixture): **azsecrets +
       azidentity.ClientSecretCredential** complete the challenge flow
       unmodified; managed-identity path via entra's `/msi/token`
       (`IDENTITY_ENDPOINT`/`IDENTITY_HEADER`); forged wrong-audience /
@@ -62,7 +62,7 @@ challenge flow and round-trips secrets.
 
 ## Cross-cutting (throughout)
 
-- [ ] CI: vet/build/test + 90% coverage floor from the first code commit.
+- [x] CI: vet/build/test + 90% coverage floor from the first code commit.
 - [ ] Starlight docs site on GitHub Pages (`/docs` = source of truth).
 - [ ] GoReleaser: binaries + distroless Docker (GHCR) + Homebrew + winget.
 - [ ] Svelte portal (vaults/secrets/deleted/clock views) — after the API
