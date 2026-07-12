@@ -63,13 +63,14 @@ challenge flow and round-trips secrets.
 - [x] Compose file with all three emulators (`docker-compose.yml`, `full`
       profile adds fabric).
 
-## P4 — SDK parity surface
+## P4 — SDK parity surface *(shipped in v0.2.0)*
 
 Round out the secondary operations the Azure SDKs expose beyond core CRUD, so a
 test written against `azkeys` / `azcertificates` never hits an endpoint the
 emulator lacks. Measured against the reference
 [james-gould emulator](https://github.com/james-gould/azure-keyvault-emulator);
-we keep our real-auth and real-crypto posture throughout.
+we keep our real-auth and real-crypto posture throughout. With these, the
+emulator reaches **full parity** on the SDK-observable surface.
 
 - [x] Keys: **import** a caller-supplied JWK (`PUT /keys/{name}`, real RSA/EC
       material — a subsequent sign/verify round-trips), update-latest
@@ -96,13 +97,15 @@ we keep our real-auth and real-crypto posture throughout.
 - [x] CI: vet/build/test + 90% coverage floor + the three-emulator chain e2e.
 - [x] Starlight docs site on GitHub Pages (`/docs` = source of truth),
       live at <https://calvinchengx.github.io/azure-keyvault-emulator/>.
-- [x] GoReleaser: binaries + distroless Docker (GHCR) + Homebrew + winget
-      (released as **v0.1.0**).
-- [x] **Svelte operator portal** (dashboard, secrets/keys/certificates/deleted
-      views, clock + fault-injection controls) — Svelte 5, built to a committed
-      `portal/dist`, embedded via `go:embed`, served at `/_emulator/portal/`,
-      with a CI drift guard + Playwright mount smoke. Mirrors the family
-      pattern.
+- [x] GoReleaser: binaries + distroless Docker (GHCR) + Homebrew + winget.
+      **v0.1.0** shipped P0–P3; **v0.2.0** adds the full P4 parity surface
+      (import, backup/restore, rng, rotation policy, key release, issuers,
+      contacts, certificate CSR merge) and the operator portal.
+- [x] **Svelte operator portal** *(v0.2.0)* — dashboard,
+      secrets/keys/certificates/deleted views, clock + fault-injection
+      controls. Svelte 5, built to a committed `portal/dist`, embedded via
+      `go:embed`, served at `/_emulator/portal/`, with a CI drift guard +
+      Playwright mount smoke. Mirrors the family pattern.
 
 ## Sequencing note
 
