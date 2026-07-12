@@ -48,6 +48,13 @@ challenge flow and round-trips secrets.
 - [ ] fabric-emulator **AKV-reference connections** resolve against this
       emulator (its roadmap item): `workspace identity → entra token →
       vault secret → connection`, fully offline.
+- [ ] e2e: the **secret-as-SP-credential chain** — the canonical "SP secret
+      lives in Key Vault" pattern, across all three emulators: an app uses
+      managed identity (entra `/msi/token`) to read a client_secret from this
+      vault, exchanges it via client credentials at entra for a
+      Fabric-audience token, and calls fabric-emulator. Every hop uses the
+      production trust relationship; a wrong or expired vault secret breaks
+      the chain exactly where it would in Azure.
 - [ ] entra-emulator enhancement: add `https://vault.azure.net` to its
       known-resource carve-outs so client-credentials scope resolution works
       without seeding a resource app.
