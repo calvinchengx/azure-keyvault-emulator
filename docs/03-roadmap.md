@@ -50,7 +50,7 @@ challenge flow and round-trips secrets.
       identity → entra token → vault secret → connection`, fully offline.
 - [x] e2e: the **secret-as-SP-credential chain** — the canonical "SP secret
       lives in Key Vault" pattern across all three emulators
-      (`e2e/chain/run.sh`, in CI): a client-credentials call stores an SP
+      (`e2e/chain/run.py`, in CI): a client-credentials call stores an SP
       secret in the vault, a **managed-identity** token (entra `/msi/token`,
       no credential in the workload) reads it back, that secret authenticates
       the SP to entra for a Fabric-audience token, and the token calls
