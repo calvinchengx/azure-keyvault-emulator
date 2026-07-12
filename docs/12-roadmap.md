@@ -1,4 +1,4 @@
-# 03 — Roadmap
+# 12 — Roadmap
 
 Same discipline as fabric-emulator: each phase independently useful, real-SDK
 e2e-verified, ≥90% coverage floor in CI from the first commit.

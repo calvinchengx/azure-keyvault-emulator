@@ -61,9 +61,12 @@ Install: `go install github.com/calvinchengx/azure-keyvault-emulator/cmd/azure-k
 `ghcr.io/calvinchengx/azure-keyvault-emulator` image (see
 [`docker-compose.yml`](docker-compose.yml) for the entra-emulator pairing).
 
-See [docs/01-architecture.md](docs/01-architecture.md),
-[docs/02-api-surface.md](docs/02-api-surface.md), and
-[docs/03-roadmap.md](docs/03-roadmap.md).
+Docs: <https://calvinchengx.github.io/azure-keyvault-emulator/> — start with
+the [Quickstart](docs/01-quickstart.md), then
+[Architecture](docs/03-architecture.md), the data-plane reference
+([Secrets](docs/06-secrets.md) / [Keys](docs/07-keys.md) /
+[Certificates](docs/08-certificates.md)), and
+[Authentication](docs/09-authentication.md).
 
 ## License
 

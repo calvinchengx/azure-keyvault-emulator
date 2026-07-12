@@ -11,3 +11,7 @@ node_modules/
 
 # GoReleaser build output
 /dist/
+
+# Docs site (Astro Starlight) — generated content + build output
+website/dist/
+website/src/content/docs/
