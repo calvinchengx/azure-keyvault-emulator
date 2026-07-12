@@ -114,6 +114,46 @@ func issueSelfSigned(p certPolicy, now int64) (cerDER, privDER, thumb string, nb
 		base64.RawURLEncoding.EncodeToString(sum[:]), notBefore.Unix(), notAfter.Unix(), nil
 }
 
+// generateCSR mints a key from the policy and a PKCS#10 CSR over it — the
+// artifact an external issuer signs. Returns base64(PKCS#8) key, base64(DER)
+// CSR, and the normalized kty.
+func generateCSR(p certPolicy) (privDER, csrDER, kty string, err error) {
+	kty, keySize, crv := "RSA", 2048, ""
+	if p.KeyProps != nil {
+		if p.KeyProps.Kty != "" {
+			kty = p.KeyProps.Kty
+		}
+		keySize, crv = p.KeyProps.KeySize, p.KeyProps.Crv
+	}
+	privB64, _, err := generateKey(kty, keySize, crv)
+	if err != nil {
+		return "", "", "", err
+	}
+	priv, err := parseKey(privB64)
+	if err != nil {
+		return "", "", "", err
+	}
+	subject, dnsNames := "CN=emulator", []string(nil)
+	if p.X509Props != nil {
+		if p.X509Props.Subject != "" {
+			subject = p.X509Props.Subject
+		}
+		if p.X509Props.SANs != nil {
+			dnsNames = p.X509Props.SANs.DNSNames
+		}
+	}
+	cn := subject
+	if len(subject) > 3 && subject[:3] == "CN=" {
+		cn = subject[3:]
+	}
+	der, err := x509.CreateCertificateRequest(rand.Reader,
+		&x509.CertificateRequest{Subject: pkix.Name{CommonName: cn}, DNSNames: dnsNames}, priv)
+	if err != nil {
+		return "", "", "", err
+	}
+	return privB64, base64.StdEncoding.EncodeToString(der), normalizeKty(kty), nil
+}
+
 func publicOf(priv any) any {
 	switch k := priv.(type) {
 	case *rsa.PrivateKey:
@@ -185,9 +225,12 @@ func (s *Service) createCertificate(w http.ResponseWriter, r *http.Request, vaul
 		return
 	}
 	pol := parsePolicy(body.Policy)
+	// A named (non-Self) issuer starts an asynchronous operation: the emulator
+	// generates the key + a PKCS#10 CSR and waits for an external signer to
+	// return the certificate via MergeCertificate. "Self" (or unset) issues a
+	// self-signed certificate synchronously.
 	if pol.IssuerRef != nil && pol.IssuerRef.Name != "" && pol.IssuerRef.Name != "Self" {
-		writeKVErr(w, http.StatusBadRequest, "IssuerNotSupported",
-			"Only the Self issuer is supported; real CA integration is out of scope for the emulator.")
+		s.createPendingCertificate(w, r, vault, name, pol, body.Policy)
 		return
 	}
 	cerDER, privDER, thumb, nbf, exp, err := issueSelfSigned(pol, s.Store.Now())
@@ -237,15 +280,127 @@ func (s *Service) certOperation(r *http.Request, name, status string) map[string
 	}
 }
 
-// getCertificateOperation is GET /certificates/{name}/pending. Self-signed
-// issuance completes immediately, so a live cert reports "completed".
+// pendingOperation is the CertificateOperation for an in-progress (external
+// issuer) request: status "inProgress" and the CSR the caller must sign.
+func (s *Service) pendingOperation(r *http.Request, p *store.PendingCert) map[string]any {
+	csr, _ := base64.StdEncoding.DecodeString(p.CSRDER)
+	return map[string]any{
+		"id":         fmt.Sprintf("%s/certificates/%s/pending", s.baseURL(r), p.Name),
+		"status":     "inProgress",
+		"target":     fmt.Sprintf("%s/certificates/%s", s.baseURL(r), p.Name),
+		"issuer":     map[string]string{"name": p.Issuer},
+		"csr":        csr,
+		"request_id": store.NewVersionID(),
+	}
+}
+
+// createPendingCertificate starts an external-issuer operation: generate the
+// key + CSR, store it pending, and return the in-progress operation.
+func (s *Service) createPendingCertificate(w http.ResponseWriter, r *http.Request, vault, name string, pol certPolicy, policyRaw json.RawMessage) {
+	if _, err := s.Store.GetDeletedCert(vault, name); err == nil {
+		writeKVErr(w, http.StatusConflict, "Conflict",
+			"Certificate is in a deleted but recoverable state; recover or purge it first.")
+		return
+	}
+	privDER, csrDER, kty, err := generateCSR(pol)
+	if err != nil {
+		writeKVErr(w, http.StatusBadRequest, "BadParameter", err.Error())
+		return
+	}
+	p := &store.PendingCert{
+		Vault: vault, Name: name, PrivateDER: privDER, CSRDER: csrDER, Kty: kty,
+		Issuer: pol.IssuerRef.Name,
+	}
+	if len(policyRaw) > 0 {
+		p.PolicyJSON = string(policyRaw)
+	}
+	if err := s.Store.SetPendingCert(p); err != nil {
+		writeKVErr(w, http.StatusInternalServerError, "InternalServerError", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusAccepted, s.pendingOperation(r, p))
+}
+
+// getCertificateOperation is GET /certificates/{name}/pending. A pending
+// external-issuer request reports "inProgress" with its CSR; an issued cert
+// reports "completed".
 func (s *Service) getCertificateOperation(w http.ResponseWriter, r *http.Request, vault string) {
 	name := r.PathValue("name")
+	if p, err := s.Store.GetPendingCert(vault, name); err == nil {
+		writeJSON(w, http.StatusOK, s.pendingOperation(r, p))
+		return
+	}
 	if _, err := s.Store.GetCert(vault, name); err != nil {
 		certNotFound(w, name)
 		return
 	}
 	writeJSON(w, http.StatusOK, s.certOperation(r, name, "completed"))
+}
+
+// mergeCertificate is POST /certificates/{name}/pending/merge: complete a
+// pending operation with the externally-signed certificate chain (x5c). The
+// leaf's public key must match the pending key; the emulator then binds the
+// stored private key to the signed cert and materializes the linked
+// key/secret.
+func (s *Service) mergeCertificate(w http.ResponseWriter, r *http.Request, vault string) {
+	name := r.PathValue("name")
+	p, err := s.Store.GetPendingCert(vault, name)
+	if errors.Is(err, store.ErrNotFound) {
+		writeKVErr(w, http.StatusNotFound, "PendingCertificateNotFound",
+			fmt.Sprintf("No pending certificate operation for %s to merge.", name))
+		return
+	}
+	if err != nil {
+		writeKVErr(w, http.StatusInternalServerError, "InternalServerError", err.Error())
+		return
+	}
+	var body struct {
+		X5C  [][]byte          `json:"x5c"`
+		Tags map[string]string `json:"tags"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || len(body.X5C) == 0 {
+		writeKVErr(w, http.StatusBadRequest, "BadParameter", "The request must include the signed certificate chain (x5c).")
+		return
+	}
+	leaf, err := x509.ParseCertificate(body.X5C[0])
+	if err != nil {
+		writeKVErr(w, http.StatusBadRequest, "BadParameter", "The merged certificate is not valid DER.")
+		return
+	}
+	priv, err := parseKey(p.PrivateDER)
+	if err != nil {
+		writeKVErr(w, http.StatusInternalServerError, "InternalServerError", err.Error())
+		return
+	}
+	if !samePublicKey(leaf.PublicKey, publicOf(priv)) {
+		writeKVErr(w, http.StatusBadRequest, "BadParameter",
+			"The merged certificate's public key does not match the pending certificate's key.")
+		return
+	}
+	sum := sha1.Sum(body.X5C[0])
+	nbf, exp := leaf.NotBefore.Unix(), leaf.NotAfter.Unix()
+	cv := &store.CertVersion{
+		Vault: vault, Name: name, CerDER: base64.StdEncoding.EncodeToString(body.X5C[0]),
+		PrivateDER: p.PrivateDER, Thumbprint: base64.RawURLEncoding.EncodeToString(sum[:]),
+		PolicyJSON: p.PolicyJSON, Enabled: true, NBF: &nbf, Exp: &exp,
+	}
+	if body.Tags != nil {
+		raw, _ := json.Marshal(body.Tags)
+		cv.TagsJSON = string(raw)
+	}
+	if err := s.Store.SetCert(cv); err != nil {
+		writeKVErr(w, http.StatusInternalServerError, "InternalServerError", err.Error())
+		return
+	}
+	if err := s.materialize(vault, name, cv, p.Kty); err != nil {
+		writeKVErr(w, http.StatusInternalServerError, "InternalServerError", err.Error())
+		return
+	}
+	if err := s.Store.DeletePendingCert(vault, name); err != nil {
+		writeKVErr(w, http.StatusInternalServerError, "InternalServerError", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusCreated, s.certBundle(r, cv))
 }
 
 func (s *Service) loadCert(w http.ResponseWriter, vault, name, version string) *store.CertVersion {

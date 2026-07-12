@@ -11,9 +11,12 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"math/big"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azcertificates"
@@ -196,6 +199,96 @@ func TestAzcertificatesIssuers(t *testing.T) {
 	if _, err := cc.DeleteIssuer(ctx, "myca", nil); err != nil {
 		t.Fatalf("DeleteIssuer: %v", err)
 	}
+}
+
+func TestAzkeysRelease(t *testing.T) {
+	f := newFixture(t)
+	kc := f.keysClient(t)
+	ctx := context.Background()
+
+	created, err := kc.CreateKey(ctx, "releasable", azkeys.CreateKeyParameters{Kty: to.Ptr(azkeys.KeyTypeRSA)}, nil)
+	if err != nil {
+		t.Fatalf("CreateKey: %v", err)
+	}
+	resp, err := kc.Release(ctx, "releasable", created.Key.KID.Version(), azkeys.ReleaseParameters{
+		TargetAttestationToken: to.Ptr("emulator-attestation"),
+	}, nil)
+	if err != nil {
+		t.Fatalf("Release: %v", err)
+	}
+	if resp.Value == nil || len(strings.Split(*resp.Value, ".")) != 3 {
+		t.Fatalf("release value is not a signed JWS: %v", resp.Value)
+	}
+}
+
+func TestAzcertificatesMerge(t *testing.T) {
+	f := newFixture(t)
+	cc := f.certsClient(t)
+	ctx := context.Background()
+
+	// A named issuer produces a pending operation with a CSR.
+	op, err := cc.CreateCertificate(ctx, "external", azcertificates.CreateCertificateParameters{
+		CertificatePolicy: &azcertificates.CertificatePolicy{
+			IssuerParameters:          &azcertificates.IssuerParameters{Name: to.Ptr("MyExternalCA")},
+			X509CertificateProperties: &azcertificates.X509CertificateProperties{Subject: to.Ptr("CN=external.test")},
+		},
+	}, nil)
+	if err != nil {
+		t.Fatalf("CreateCertificate: %v", err)
+	}
+	if op.Status == nil || *op.Status != "inProgress" || len(op.CSR) == 0 {
+		t.Fatalf("expected inProgress operation with CSR, got status=%v csrLen=%d", op.Status, len(op.CSR))
+	}
+
+	// Act as the external CA: sign the CSR.
+	leaf := signCSRAsCA(t, op.CSR)
+
+	merged, err := cc.MergeCertificate(ctx, "external", azcertificates.MergeCertificateParameters{
+		X509Certificates: [][]byte{leaf},
+	}, nil)
+	if err != nil {
+		t.Fatalf("MergeCertificate: %v", err)
+	}
+	if len(merged.CER) == 0 {
+		t.Fatal("merged certificate has no CER")
+	}
+	if _, err := cc.GetCertificate(ctx, "external", "", nil); err != nil {
+		t.Fatalf("GetCertificate after merge: %v", err)
+	}
+}
+
+// signCSRAsCA parses a CSR and returns a DER leaf signed by a throwaway CA over
+// the CSR's public key — the external-issuer half of the merge flow.
+func signCSRAsCA(t *testing.T, csrDER []byte) []byte {
+	t.Helper()
+	csr, err := x509.ParseCertificateRequest(csrDER)
+	if err != nil {
+		t.Fatal(err)
+	}
+	caKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nb := time.Unix(1_600_000_000, 0)
+	caTmpl := &x509.Certificate{
+		SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "External CA"},
+		NotBefore: nb, NotAfter: nb.AddDate(1, 0, 0),
+		IsCA: true, BasicConstraintsValid: true, KeyUsage: x509.KeyUsageCertSign,
+	}
+	caDER, err := x509.CreateCertificate(rand.Reader, caTmpl, caTmpl, &caKey.PublicKey, caKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	caCert, _ := x509.ParseCertificate(caDER)
+	leafTmpl := &x509.Certificate{
+		SerialNumber: big.NewInt(2), Subject: csr.Subject,
+		NotBefore: nb, NotAfter: nb.AddDate(1, 0, 0), KeyUsage: x509.KeyUsageDigitalSignature,
+	}
+	leaf, err := x509.CreateCertificate(rand.Reader, leafTmpl, caCert, csr.PublicKey, caKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return leaf
 }
 
 func TestAzcertificatesContacts(t *testing.T) {

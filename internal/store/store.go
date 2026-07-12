@@ -139,6 +139,17 @@ CREATE TABLE IF NOT EXISTS cert_contacts (
 	contacts_json TEXT NOT NULL,
 	PRIMARY KEY (vault)
 );
+CREATE TABLE IF NOT EXISTS cert_pending (
+	vault TEXT NOT NULL,
+	name TEXT NOT NULL,
+	private_der TEXT NOT NULL,   -- base64(PKCS#8) of the generated key
+	csr_der TEXT NOT NULL,       -- base64(DER) PKCS#10 CSR the caller signs
+	policy_json TEXT NOT NULL DEFAULT '{}',
+	kty TEXT NOT NULL,
+	issuer TEXT NOT NULL DEFAULT '',
+	created_at INTEGER NOT NULL,
+	PRIMARY KEY (vault, name)
+);
 `)
 	return err
 }

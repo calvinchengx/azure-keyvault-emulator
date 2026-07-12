@@ -1,17 +1,20 @@
 # 08 — Certificates
 
-Self-signed issuance and PFX/PEM import, producing genuine X.509. Real CA
-integration (DigiCert, etc.) is a **non-goal** — only the `Self` issuer is
-supported. Same versioning + soft-delete skeleton as
+Self-signed issuance, PFX/PEM import, and the **external-issuer CSR/merge
+flow** — all producing genuine X.509. A live third-party CA is still a non-goal
+(the emulator never phones out), but a named issuer produces a real CSR you can
+sign yourself and merge back, so the SDK's async-issuance path works end to
+end. Same versioning + soft-delete skeleton as
 [secrets](06-secrets.md)/[keys](07-keys.md).
 
 ## Endpoints
 
 | Method + path | Purpose |
 |---|---|
-| `POST /certificates/{name}/create` | issue self-signed from a policy → certificate operation |
+| `POST /certificates/{name}/create` | `Self` issuer → self-signed cert; a named issuer → pending operation with a CSR |
 | `POST /certificates/{name}/import` | import a base64 PKCS#12 (PFX) or PEM bundle |
-| `GET /certificates/{name}/pending` | the certificate operation (poll) |
+| `POST /certificates/{name}/pending/merge` | complete a pending operation with the signed chain (`{x5c}`) |
+| `GET /certificates/{name}/pending` | the certificate operation (poll) — `inProgress`+CSR, or `completed` |
 | `GET /certificates/{name}` \| `/certificates/{name}/{version}` | get the certificate bundle |
 | `PATCH /certificates/{name}` \| `/certificates/{name}/{version}` | update attributes/tags (and policy if supplied) |
 | `GET` \| `PATCH /certificates/{name}/policy` | get / update the certificate policy |
@@ -35,14 +38,30 @@ issuance — only the `Self` issuer produces certificates (see below).
 ## Issuance
 
 `create` reads the policy's `key_props` (RSA/EC, size/curve), `x509_props`
-(subject, subject-alternative DNS names, validity months), and `issuer`. Since
-self-signed issuance is synchronous, the returned operation reports
-`status: completed` immediately — the SDK polls `/pending` once and proceeds to
-`GET`. A non-`Self` issuer is rejected (`IssuerNotSupported`).
+(subject, subject-alternative DNS names, validity months), and `issuer`.
+
+- **`Self` (or unset) issuer → synchronous self-signed.** The returned
+  operation reports `status: completed` immediately; the SDK polls `/pending`
+  once and proceeds to `GET`.
+- **A named issuer → asynchronous (pending) operation.** The emulator
+  generates the key and a real PKCS#10 **CSR**, and the operation reports
+  `status: inProgress` with the `csr`. You sign that CSR with your own CA and
+  return the chain via **merge** (below) — the classic external-issuance flow,
+  fully offline. The emulator never contacts a real CA.
 
 The **CER is a real, parseable X.509**: the CI e2e creates a cert via the SDK
 and parses `got.CER` with `x509.ParseCertificate`, asserting the requested
 subject CN and SAN.
+
+## Merge (completing an external issuance)
+
+`POST /certificates/{name}/pending/merge` takes the signed chain (`x5c`, a list
+of DER certs, leaf first) and completes the pending operation. The emulator
+**verifies the leaf's public key matches the pending key** (mismatch → 400),
+binds the stored private key to the signed certificate, and materializes the
+linked key/secret. The CI e2e drives the full loop against the real
+`azcertificates` SDK: `CreateCertificate` with a named issuer → read the CSR
+off the operation → sign it with a throwaway CA → `MergeCertificate` → `GetCertificate`.
 
 ## Import
 

@@ -17,8 +17,16 @@ Software-protected only (no HSM).
 | `DELETE /keys/{name}` | soft-delete |
 | `POST /keys/{name}/backup` · `POST /keys/restore` | opaque backup blob (all versions) → restore into an empty name |
 | `GET` \| `PUT /keys/{name}/rotationpolicy` | rotation policy (round-tripped; unset returns the disabled-rotation default) |
+| `POST /keys/{name}/{version}/release` | Secure Key Release → `{value}` (a signed JWS carrying the released public JWK) |
 | `GET/DELETE /deletedkeys/{name}`, `GET /deletedkeys`, `POST /deletedkeys/{name}/recover` | deleted-key lifecycle |
 | `POST /rng` | `{count}` (1–128) → `{value}` cryptographically-random base64url bytes |
+
+**Release** exercises the SDK's `ReleaseKey` path. The response `value` is a
+genuine three-part JWS — a fresh signing key is generated per call and its
+public JWK rides in the header, so the token self-verifies. Real HSM/enclave
+attestation is out of scope (there is no secure enclave to attest), so any
+enabled key is releasable; the emulator emulates the *shape and call path*, not
+a hardware trust boundary.
 
 **Import** reconstructs a real key from the JWK's private members (RSA
 `n/e/d/p/q`, EC `crv/x/y/d`); the material is validated (RSA CRT check, EC

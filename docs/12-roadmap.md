@@ -81,10 +81,15 @@ we keep our real-auth and real-crypto posture throughout.
       (`PATCH /certificates/{name}/policy`), **issuers**
       (`GET`/`PUT`/`PATCH`/`DELETE /certificates/issuers/{name}` + list) and
       **contacts** (`GET`/`PUT`/`DELETE /certificates/contacts`).
-- Intentional non-goals (documented, not gaps): **key release** (SKR needs an
-      attestation authority) and **certificate CSR merge** (a CA-signed flow) —
-      both out of scope for a self-signed, offline emulator, matching the
-      existing "Self issuer only" boundary.
+- [x] **Secure Key Release** (`POST /keys/{name}/{version}/release`) — a
+      genuine signed JWS carrying the released public JWK. No HSM attestation
+      (there is no enclave to attest), so any enabled key is releasable; the
+      call path and token shape are emulated.
+- [x] **Certificate CSR merge** (`POST /certificates/{name}/pending/merge`) —
+      a named issuer creates a pending operation with a real PKCS#10 CSR; you
+      sign it with your own CA and merge the chain back, completing the
+      async-issuance path fully offline. A live third-party CA remains the only
+      certificate non-goal (the emulator never phones out).
 
 ## Cross-cutting (throughout)
 

@@ -117,6 +117,54 @@ func (s *Store) DeleteCertContacts(vault string) (string, error) {
 	return js, err
 }
 
+// ---- pending certificates (external-issuer CSR / merge flow) ----
+
+// PendingCert is a certificate whose key exists locally but whose signed
+// certificate is awaited from an external issuer — created via a non-Self
+// issuer, completed by MergeCertificate.
+type PendingCert struct {
+	Vault      string
+	Name       string
+	PrivateDER string
+	CSRDER     string
+	PolicyJSON string
+	Kty        string
+	Issuer     string
+	CreatedAt  int64
+}
+
+// SetPendingCert upserts a pending certificate operation.
+func (s *Store) SetPendingCert(p *PendingCert) error {
+	if p.PolicyJSON == "" {
+		p.PolicyJSON = "{}"
+	}
+	p.CreatedAt = s.Now()
+	_, err := s.db.Exec(`INSERT INTO cert_pending (vault, name, private_der, csr_der, policy_json, kty, issuer, created_at)
+VALUES (?,?,?,?,?,?,?,?)
+ON CONFLICT(vault, name) DO UPDATE SET private_der = excluded.private_der, csr_der = excluded.csr_der,
+	policy_json = excluded.policy_json, kty = excluded.kty, issuer = excluded.issuer, created_at = excluded.created_at`,
+		p.Vault, p.Name, p.PrivateDER, p.CSRDER, p.PolicyJSON, p.Kty, p.Issuer, p.CreatedAt)
+	return err
+}
+
+// GetPendingCert returns a pending operation, or ErrNotFound.
+func (s *Store) GetPendingCert(vault, name string) (*PendingCert, error) {
+	p := &PendingCert{}
+	err := s.db.QueryRow(`SELECT vault, name, private_der, csr_der, policy_json, kty, issuer, created_at
+FROM cert_pending WHERE vault = ? AND name = ?`, vault, name).
+		Scan(&p.Vault, &p.Name, &p.PrivateDER, &p.CSRDER, &p.PolicyJSON, &p.Kty, &p.Issuer, &p.CreatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	return p, err
+}
+
+// DeletePendingCert removes a pending operation (no-op if absent).
+func (s *Store) DeletePendingCert(vault, name string) error {
+	_, err := s.db.Exec(`DELETE FROM cert_pending WHERE vault = ? AND name = ?`, vault, name)
+	return err
+}
+
 // UpdateCertPolicy replaces the policy JSON on a certificate's newest version.
 func (s *Store) UpdateCertPolicy(vault, name, policyJSON string) error {
 	v, err := s.GetCert(vault, name)

@@ -92,6 +92,32 @@ func TestUpdateCertPolicyStore(t *testing.T) {
 	}
 }
 
+func TestPendingCertStore(t *testing.T) {
+	s := newTestStore(t)
+	if _, err := s.GetPendingCert("v", "c"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("missing pending err = %v", err)
+	}
+	p := &PendingCert{Vault: "v", Name: "c", PrivateDER: "k", CSRDER: "r", Kty: "RSA", Issuer: "DigiCert"}
+	if err := s.SetPendingCert(p); err != nil {
+		t.Fatal(err)
+	}
+	// Upsert.
+	p.CSRDER = "r2"
+	if err := s.SetPendingCert(p); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.GetPendingCert("v", "c")
+	if err != nil || got.CSRDER != "r2" || got.Issuer != "DigiCert" || got.PolicyJSON != "{}" {
+		t.Fatalf("get pending = %+v %v", got, err)
+	}
+	if err := s.DeletePendingCert("v", "c"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.GetPendingCert("v", "c"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("get after delete = %v", err)
+	}
+}
+
 // TestParityClosedDB sweeps the parity store methods against a closed database
 // so their error-return branches are exercised.
 func TestParityClosedDB(t *testing.T) {
@@ -105,6 +131,8 @@ func TestParityClosedDB(t *testing.T) {
 		"ListCertIssuers":      func() error { _, e := c.ListCertIssuers("v"); return e },
 		"GetCertContacts":      func() error { _, e := c.GetCertContacts("v"); return e },
 		"SetCertContacts":      func() error { return c.SetCertContacts("v", "{}") },
+		"GetPendingCert":       func() error { _, e := c.GetPendingCert("v", "c"); return e },
+		"SetPendingCert":       func() error { return c.SetPendingCert(&PendingCert{Vault: "v", Name: "c"}) },
 	}
 	for name, fn := range checks {
 		if err := fn(); err == nil {

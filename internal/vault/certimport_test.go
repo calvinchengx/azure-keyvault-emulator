@@ -90,3 +90,36 @@ func TestImportMaterializesKeyAndSecret(t *testing.T) {
 		t.Fatalf("linked secret missing: %v", err)
 	}
 }
+
+// TestImportCertificateBranches covers the handler's remaining paths:
+// malformed body, a cert-only import (no key → no materialize), tags/policy,
+// and the soft-delete conflict.
+func TestImportCertificateBranches(t *testing.T) {
+	s, st := newService(t, "")
+	rsaKey, _ := rsa.GenerateKey(rand.Reader, 2048)
+	certDER := makeCert(t, rsaKey, &rsaKey.PublicKey)
+	certOnly := base64.StdEncoding.EncodeToString([]byte(
+		string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER}))))
+
+	// Malformed / empty value.
+	for _, body := range []string{`{`, `{}`, `{"value":""}`} {
+		if w := do(s.importCertificate, "POST", "/x", body, map[string]string{"name": "c"}); w.Code != http.StatusBadRequest {
+			t.Fatalf("import %q = %d", body, w.Code)
+		}
+	}
+	// Cert-only import: no private key, so no linked key materializes.
+	body := `{"value":"` + certOnly + `","tags":{"a":"b"},"policy":{"issuer":{"name":"Self"}}}`
+	if w := do(s.importCertificate, "POST", "/x", body, map[string]string{"name": "co"}); w.Code != http.StatusOK {
+		t.Fatalf("cert-only import = %d %s", w.Code, w.Body.Bytes())
+	}
+	if _, err := st.GetKey("emulator", "co"); err == nil {
+		t.Fatal("cert-only import should not materialize a key")
+	}
+	// Import onto a soft-deleted name conflicts.
+	if _, err := st.DeleteCert("emulator", "co", 90); err != nil {
+		t.Fatal(err)
+	}
+	if w := do(s.importCertificate, "POST", "/x", body, map[string]string{"name": "co"}); w.Code != http.StatusConflict {
+		t.Fatalf("import over deleted = %d", w.Code)
+	}
+}

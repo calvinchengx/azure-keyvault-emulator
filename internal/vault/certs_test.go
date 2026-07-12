@@ -21,9 +21,11 @@ func TestCreateCertificateBranches(t *testing.T) {
 	if w := createTestCert(t, s, "c", `{`); w.Code != http.StatusBadRequest {
 		t.Fatalf("malformed = %d", w.Code)
 	}
-	// Non-Self issuer rejected.
-	if w := createTestCert(t, s, "c", `{"policy":{"issuer":{"name":"DigiCert"}}}`); w.Code != http.StatusBadRequest {
-		t.Fatalf("non-Self issuer = %d", w.Code)
+	// A non-Self issuer starts an async (pending) operation, not a rejection.
+	if w := createTestCert(t, s, "ext", `{"policy":{"issuer":{"name":"DigiCert"}}}`); w.Code != http.StatusAccepted {
+		t.Fatalf("non-Self issuer = %d %s", w.Code, w.Body.Bytes())
+	} else if !strings.Contains(w.Body.String(), `"inProgress"`) || !strings.Contains(w.Body.String(), `"csr"`) {
+		t.Fatalf("pending op = %s", w.Body.Bytes())
 	}
 	// Bad key policy → 400 from generateKey.
 	if w := createTestCert(t, s, "c", `{"policy":{"key_props":{"kty":"RSA","key_size":123}}}`); w.Code != http.StatusBadRequest {

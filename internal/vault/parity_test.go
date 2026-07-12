@@ -9,6 +9,8 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
@@ -18,7 +20,225 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
+
+// signCSR acts as an external CA: it parses a PKCS#10 CSR and returns a DER
+// leaf certificate over the CSR's public key, signed by a throwaway CA.
+func signCSR(t *testing.T, csrDER []byte) []byte {
+	t.Helper()
+	csr, err := x509.ParseCertificateRequest(csrDER)
+	if err != nil {
+		t.Fatal(err)
+	}
+	caKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	notBefore := time.Unix(1_600_000_000, 0)
+	caTmpl := &x509.Certificate{
+		SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "Test CA"},
+		NotBefore: notBefore, NotAfter: notBefore.AddDate(1, 0, 0),
+		IsCA: true, BasicConstraintsValid: true, KeyUsage: x509.KeyUsageCertSign,
+	}
+	caDER, err := x509.CreateCertificate(rand.Reader, caTmpl, caTmpl, &caKey.PublicKey, caKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	caCert, _ := x509.ParseCertificate(caDER)
+	leafTmpl := &x509.Certificate{
+		SerialNumber: big.NewInt(2), Subject: csr.Subject,
+		NotBefore: notBefore, NotAfter: notBefore.AddDate(1, 0, 0),
+		KeyUsage: x509.KeyUsageDigitalSignature,
+	}
+	leaf, err := x509.CreateCertificate(rand.Reader, leafTmpl, caCert, csr.PublicKey, caKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return leaf
+}
+
+func TestReleaseKey(t *testing.T) {
+	s, _ := newService(t, "")
+
+	// Release on a missing key 404s.
+	if w := do(s.releaseKey, "POST", "/x", `{}`, map[string]string{"name": "nope", "version": ""}); w.Code != http.StatusNotFound {
+		t.Fatalf("release missing = %d", w.Code)
+	}
+	createTestKey(t, s, "rk", `{"kty":"RSA"}`)
+	v, _ := s.Store.GetKey("emulator", "rk")
+	w := do(s.releaseKey, "POST", "/x", `{"target":"aas-attestation","nonce":"n1"}`,
+		map[string]string{"name": "rk", "version": v.Version})
+	if w.Code != http.StatusOK {
+		t.Fatalf("release = %d %s", w.Code, w.Body.Bytes())
+	}
+	var out struct{ Value string }
+	_ = json.Unmarshal(w.Body.Bytes(), &out)
+	if parts := strings.Split(out.Value, "."); len(parts) != 3 {
+		t.Fatalf("release token is not a 3-part JWS: %q", out.Value)
+	} else if _, err := base64.RawURLEncoding.DecodeString(parts[2]); err != nil {
+		t.Fatalf("signature segment not base64url: %v", err)
+	}
+
+	// A disabled key cannot be released.
+	createTestKey(t, s, "off", `{"kty":"RSA","attributes":{"enabled":false}}`)
+	ov, _ := s.Store.LatestKeyIncludingDeleted("emulator", "off")
+	if w := do(s.releaseKey, "POST", "/x", `{}`, map[string]string{"name": "off", "version": ov.Version}); w.Code != http.StatusForbidden {
+		t.Fatalf("release disabled = %d", w.Code)
+	}
+}
+
+func TestCertMergeFlow(t *testing.T) {
+	s, _ := newService(t, "")
+	nv := map[string]string{"name": "ext"}
+
+	// A named issuer starts a pending operation exposing a CSR.
+	cw := createTestCert(t, s, "ext",
+		`{"policy":{"issuer":{"name":"DigiCert"},"x509_props":{"subject":"CN=ext.test"}}}`)
+	if cw.Code != http.StatusAccepted {
+		t.Fatalf("create pending = %d %s", cw.Code, cw.Body.Bytes())
+	}
+	op := do(s.getCertificateOperation, "GET", "/x", "", nv)
+	if op.Code != http.StatusOK || !strings.Contains(op.Body.String(), `"inProgress"`) {
+		t.Fatalf("operation = %d %s", op.Code, op.Body.Bytes())
+	}
+
+	p, err := s.Store.GetPendingCert("emulator", "ext")
+	if err != nil {
+		t.Fatalf("pending missing: %v", err)
+	}
+	csrDER, _ := base64.StdEncoding.DecodeString(p.CSRDER)
+
+	// Merge missing pending → 404.
+	empty, _ := json.Marshal(map[string]any{"x5c": [][]byte{signCSR(t, csrDER)}})
+	if w := do(s.mergeCertificate, "POST", "/x", string(empty), map[string]string{"name": "none"}); w.Code != http.StatusNotFound {
+		t.Fatalf("merge no pending = %d", w.Code)
+	}
+	// Bad body / empty chain / non-base64 / valid-base64-but-not-a-cert → 400.
+	for _, body := range []string{`{`, `{"x5c":[]}`, `{"x5c":["!!!!"]}`, `{"x5c":["aGVsbG8="]}`} {
+		if w := do(s.mergeCertificate, "POST", "/x", body, nv); w.Code != http.StatusBadRequest {
+			t.Fatalf("merge %q = %d", body, w.Code)
+		}
+	}
+	// A cert over the wrong key is rejected.
+	other, _ := json.Marshal(map[string]any{"x5c": [][]byte{signWrongKey(t)}})
+	if w := do(s.mergeCertificate, "POST", "/x", string(other), nv); w.Code != http.StatusBadRequest {
+		t.Fatalf("merge wrong key = %d %s", w.Code, w.Body.Bytes())
+	}
+
+	// The real merge: sign the CSR, submit the chain, complete the cert.
+	good, _ := json.Marshal(map[string]any{"x5c": [][]byte{signCSR(t, csrDER)}, "tags": map[string]string{"t": "1"}})
+	mw := do(s.mergeCertificate, "POST", "/x", string(good), nv)
+	if mw.Code != http.StatusCreated {
+		t.Fatalf("merge = %d %s", mw.Code, mw.Body.Bytes())
+	}
+	// The certificate is now retrievable, the pending is gone, and the linked
+	// key/secret materialized.
+	if w := do(s.getCertificate, "GET", "/x", "", nv); w.Code != http.StatusOK {
+		t.Fatalf("get merged = %d", w.Code)
+	}
+	if _, err := s.Store.GetPendingCert("emulator", "ext"); err == nil {
+		t.Fatal("pending survived merge")
+	}
+	if _, err := s.Store.GetKey("emulator", "ext"); err != nil {
+		t.Fatalf("linked key missing after merge: %v", err)
+	}
+	// Operation now reports completed.
+	if w := do(s.getCertificateOperation, "GET", "/x", "", nv); !strings.Contains(w.Body.String(), `"completed"`) {
+		t.Fatalf("operation after merge = %s", w.Body.Bytes())
+	}
+}
+
+func TestPendingCertBranches(t *testing.T) {
+	s, _ := newService(t, "")
+
+	// An EC key policy exercises the EC CSR path, then a full merge exercises
+	// the EC materialize path.
+	if w := createTestCert(t, s, "ec-ext",
+		`{"policy":{"issuer":{"name":"CA"},"key_props":{"kty":"EC","crv":"P-384"}}}`); w.Code != http.StatusAccepted {
+		t.Fatalf("ec pending = %d %s", w.Code, w.Body.Bytes())
+	}
+	ecp, err := s.Store.GetPendingCert("emulator", "ec-ext")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ecCSR, _ := base64.StdEncoding.DecodeString(ecp.CSRDER)
+	ecMerge, _ := json.Marshal(map[string]any{"x5c": [][]byte{signCSR(t, ecCSR)}})
+	if w := do(s.mergeCertificate, "POST", "/x", string(ecMerge), map[string]string{"name": "ec-ext"}); w.Code != http.StatusCreated {
+		t.Fatalf("ec merge = %d %s", w.Code, w.Body.Bytes())
+	}
+	if k, err := s.Store.GetKey("emulator", "ec-ext"); err != nil || k.Kty != "EC" {
+		t.Fatalf("ec linked key = %+v %v", k, err)
+	}
+	// A bad key policy fails CSR key generation → 400.
+	if w := createTestCert(t, s, "bad",
+		`{"policy":{"issuer":{"name":"CA"},"key_props":{"kty":"RSA","key_size":123}}}`); w.Code != http.StatusBadRequest {
+		t.Fatalf("bad-key pending = %d", w.Code)
+	}
+	// Starting a pending op over a soft-deleted name conflicts.
+	createTestCert(t, s, "gone", `{"policy":{"issuer":{"name":"Self"}}}`)
+	if _, err := s.Store.DeleteCert("emulator", "gone", 90); err != nil {
+		t.Fatal(err)
+	}
+	if w := createTestCert(t, s, "gone", `{"policy":{"issuer":{"name":"CA"}}}`); w.Code != http.StatusConflict {
+		t.Fatalf("pending over deleted = %d", w.Code)
+	}
+}
+
+// TestPendingMergeStorageFailures drops the tables under the pending/merge
+// handlers to reach their 500 paths.
+func TestPendingMergeStorageFailures(t *testing.T) {
+	dir := t.TempDir()
+	s, st := newService(t, dir)
+
+	// A pending op whose CSR we sign up-front, before breaking the DB.
+	createTestCert(t, s, "mp", `{"policy":{"issuer":{"name":"CA"}}}`)
+	p, err := st.GetPendingCert("emulator", "mp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	csr, _ := base64.StdEncoding.DecodeString(p.CSRDER)
+	good, _ := json.Marshal(map[string]any{"x5c": [][]byte{signCSR(t, csr)}})
+
+	db, err := sql.Open("sqlite", filepath.Join(dir, "azure-keyvault-emulator.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	// Merge fails when it can't persist the completed cert.
+	if _, err := db.Exec(`DROP TABLE cert_versions`); err != nil {
+		t.Fatal(err)
+	}
+	if w := do(s.mergeCertificate, "POST", "/x", string(good), map[string]string{"name": "mp"}); w.Code != http.StatusInternalServerError {
+		t.Fatalf("merge with no cert_versions = %d", w.Code)
+	}
+	// Starting a pending op fails when it can't persist the pending row.
+	if _, err := db.Exec(`DROP TABLE cert_pending`); err != nil {
+		t.Fatal(err)
+	}
+	if w := createTestCert(t, s, "q", `{"policy":{"issuer":{"name":"CA"}}}`); w.Code != http.StatusInternalServerError {
+		t.Fatalf("pending create with no cert_pending = %d", w.Code)
+	}
+}
+
+// signWrongKey returns a self-signed leaf over a fresh, unrelated key.
+func signWrongKey(t *testing.T) []byte {
+	t.Helper()
+	k, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	notBefore := time.Unix(1_600_000_000, 0)
+	tmpl := &x509.Certificate{
+		SerialNumber: big.NewInt(9), Subject: pkix.Name{CommonName: "wrong"},
+		NotBefore: notBefore, NotAfter: notBefore.AddDate(1, 0, 0),
+	}
+	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &k.PublicKey, k)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return der
+}
 
 func b64uStr(b []byte) string { return base64.RawURLEncoding.EncodeToString(b) }
 

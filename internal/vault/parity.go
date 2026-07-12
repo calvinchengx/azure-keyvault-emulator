@@ -150,6 +150,51 @@ func (s *Service) restoreKey(w http.ResponseWriter, r *http.Request, vault strin
 	}
 }
 
+// ---- key release (Secure Key Release) ----
+
+// releaseKey is POST /keys/{name}/{version}/release. It returns a signed JWS
+// carrying the released key's public JWK — the SDK's ReleaseKey path. Real
+// attestation is out of scope (there is no HSM/enclave), so the emulator
+// releases any enabled key, like the reference emulator; the token is
+// nonetheless a genuine signed object.
+func (s *Service) releaseKey(w http.ResponseWriter, r *http.Request, vault string) {
+	v := s.loadKey(w, vault, r.PathValue("name"), r.PathValue("version"))
+	if v == nil {
+		return
+	}
+	var body struct {
+		Target string `json:"target"`
+		Nonce  string `json:"nonce"`
+		Enc    string `json:"enc"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&body)
+
+	priv, err := parseKey(v.PrivateDER)
+	if err != nil {
+		writeKVErr(w, http.StatusInternalServerError, "InternalServerError", err.Error())
+		return
+	}
+	kid := fmt.Sprintf("%s/keys/%s/%s", s.baseURL(r), v.Name, v.Version)
+	jwk, err := publicJWK(priv, kid, v.Kty, keyOps(v))
+	if err != nil {
+		writeKVErr(w, http.StatusInternalServerError, "InternalServerError", err.Error())
+		return
+	}
+	claims := map[string]any{
+		"response": map[string]any{"key": map[string]any{"key": jwk, "attributes": s.keyAttrs(v)}},
+		"iat":      s.Store.Now(),
+	}
+	if body.Nonce != "" {
+		claims["nonce"] = body.Nonce
+	}
+	token, err := buildReleaseToken(claims)
+	if err != nil {
+		writeKVErr(w, http.StatusInternalServerError, "InternalServerError", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"value": token})
+}
+
 // ---- key rotation policy ----
 
 func (s *Service) getKeyRotationPolicy(w http.ResponseWriter, r *http.Request, vault string) {

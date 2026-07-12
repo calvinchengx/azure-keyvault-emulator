@@ -14,6 +14,7 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"math/big"
 )
@@ -91,6 +92,14 @@ type jwkImport struct {
 	X      string   `json:"x"`
 	Y      string   `json:"y"`
 	KeyOps []string `json:"key_ops"`
+}
+
+// samePublicKey reports whether two public keys are equal, using the standard
+// library's per-type Equal method.
+func samePublicKey(a, b any) bool {
+	type equaler interface{ Equal(crypto.PublicKey) bool }
+	ae, ok := a.(equaler)
+	return ok && ae.Equal(b)
 }
 
 // ktyOf reports "RSA" or "EC" for a parsed private key (empty for neither).
@@ -172,6 +181,38 @@ func importJWK(j jwkImport) (privateDER, kty, crv string, err error) {
 		return base64.StdEncoding.EncodeToString(der), "EC", j.Crv, nil
 	}
 	return "", "", "", fmt.Errorf("unsupported kty %q", j.Kty)
+}
+
+// buildReleaseToken produces a signed JWS whose payload is claims — the
+// "signed object containing the released key" a Secure Key Release returns. A
+// fresh RSA key signs it and its public JWK rides in the header, so the token
+// is self-verifiable (real crypto, not a stub string). The SDK returns the
+// value verbatim; the signature makes it a well-formed release token.
+func buildReleaseToken(claims map[string]any) (string, error) {
+	signer, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return "", err
+	}
+	pubJWK := map[string]any{
+		"kty": "RSA",
+		"n":   b64u(signer.N.Bytes()),
+		"e":   b64u(big.NewInt(int64(signer.E)).Bytes()),
+	}
+	header, err := json.Marshal(map[string]any{"alg": "RS256", "typ": "JWT", "jwk": pubJWK})
+	if err != nil {
+		return "", err
+	}
+	payload, err := json.Marshal(claims)
+	if err != nil {
+		return "", err
+	}
+	signingInput := b64u(header) + "." + b64u(payload)
+	sum := sha256.Sum256([]byte(signingInput))
+	sig, err := rsa.SignPKCS1v15(rand.Reader, signer, crypto.SHA256, sum[:])
+	if err != nil {
+		return "", err
+	}
+	return signingInput + "." + b64u(sig), nil
 }
 
 // randomBytes returns count cryptographically-random bytes (1..128, the

@@ -87,9 +87,13 @@ func New(cfg *config.Config, st *store.Store, v *auth.Validator) *Service {
 		s.mux.HandleFunc("POST /keys/{name}/{version}/"+op, s.withAuth("keys/"+op, s.cryptoOp(op)))
 		s.mux.HandleFunc("POST /keys/{name}/"+op, s.withAuth("keys/"+op, s.cryptoOp(op)))
 	}
+	// Secure Key Release (versioned + unversioned via the double-slash rewrite).
+	s.mux.HandleFunc("POST /keys/{name}/{version}/release", s.withAuth("keys/release", s.releaseKey))
+	s.mux.HandleFunc("POST /keys/{name}/release", s.withAuth("keys/release", s.releaseKey))
 
 	s.mux.HandleFunc("POST /certificates/{name}/create", s.withAuth("certificates/create", s.createCertificate))
 	s.mux.HandleFunc("POST /certificates/{name}/import", s.withAuth("certificates/import", s.importCertificate))
+	s.mux.HandleFunc("POST /certificates/{name}/pending/merge", s.withAuth("certificates/merge", s.mergeCertificate))
 	s.mux.HandleFunc("POST /certificates/{name}/backup", s.withAuth("certificates/backup", s.backupCertificate))
 	s.mux.HandleFunc("POST /certificates/restore", s.withAuth("certificates/restore", s.restoreCertificate))
 	s.mux.HandleFunc("GET /certificates/{name}/pending", s.withAuth("certificates/get", s.getCertificateOperation))
