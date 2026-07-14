@@ -16,9 +16,10 @@ import { execSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-// The parity doc is `docs/parity.md` today, but older tags carry it numbered
-// (`docs/17-parity.md`), so snapshots of those tags must still match.
-const PARITY_RE = /(^|[/-])parity\.md$/;
+// Match the parity map exactly — `docs/parity.md`, never `*-parity.md`. The
+// loose form is only needed in fabric-emulator, whose older tags carry the map
+// numbered; here it would just be a trap for any future `*-parity.md` doc.
+const PARITY_RE = /(^|\/)parity\.md$/;
 
 function git(repo, args) {
   return execSync(`git ${args}`, { cwd: repo, stdio: ['ignore', 'pipe', 'ignore'] }).toString();

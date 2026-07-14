@@ -22,7 +22,7 @@ const PARITY = collectParity(REPO);
 const IS_RELEASE = /^v\d+\.\d+\.\d+$/.test(PARITY.version);
 // The parity map is the one doc without a reading-order number: it is a living
 // reference rather than a chapter, and its URL is just /parity/.
-const PARITY_RE = /(^|[/-])parity\.md$/;
+const PARITY_RE = /(^|\/)parity\.md$/;
 // Docs are `NN-name.md` chapters, plus the un-numbered parity map.
 const DOC_RE = /^(\d{2}-.*|parity)\.md$/;
 
