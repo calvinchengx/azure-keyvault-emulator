@@ -65,6 +65,20 @@ A read-only **operator portal** (dashboard, object browsers, clock + fault
 controls) is embedded in the binary and served at
 `http://localhost:8444/_emulator/portal/` — no extra process.
 
+## Quick start
+
+Same three verbs on Linux, macOS and Windows — see
+[platform setup](docs/14-platform-setup.md) for the prerequisites:
+
+```bash
+make doctor   # toolchain + docker context check — run this first
+make up       # entra-emulator :8443 + keyvault-emulator :8444
+make status   # is the pair usable? (containers, endpoints, the 401 challenge)
+```
+
+`make up PROFILE="--profile full"` adds fabric-emulator for the
+secret-as-SP-credential chain.
+
 Docs: <https://calvinchengx.github.io/azure-keyvault-emulator/> — start with
 the [Quickstart](docs/01-quickstart.md), then
 [Architecture](docs/03-architecture.md), the data-plane reference

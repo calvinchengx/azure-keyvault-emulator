@@ -20,6 +20,23 @@ func freePort(t *testing.T) int {
 	return ln.Addr().(*net.TCPAddr).Port
 }
 
+// serverDataDir is t.TempDir() minus the strict cleanup, for tests that start a
+// server and leave it running. run() blocks until process exit and has no
+// shutdown hook, so the SQLite file stays open for the life of the test binary
+// — and Windows refuses to unlink an open file, so t.TempDir()'s own RemoveAll
+// fails the test after it has already passed. POSIX unlinks open files happily,
+// which is why this only ever surfaced off Linux (CI here is ubuntu-only).
+// Cleanup is best-effort; the OS reclaims the temp directory regardless.
+func serverDataDir(t *testing.T) string {
+	t.Helper()
+	dir, err := os.MkdirTemp("", "kv-emulator-test-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	return dir
+}
+
 func clearEnv(t *testing.T) {
 	t.Helper()
 	for _, k := range []string{"KV_ADDR", "KV_DATA_DIR", "KV_ENTRA_ISSUER",
@@ -61,7 +78,7 @@ func poll(t *testing.T, client *http.Client, url string) {
 func TestRunServesTLS(t *testing.T) {
 	clearEnv(t)
 	port := freePort(t)
-	dir := t.TempDir()
+	dir := serverDataDir(t)
 	go func() {
 		// Serve blocks until process exit; the goroutine dies with the test.
 		_ = run([]string{
