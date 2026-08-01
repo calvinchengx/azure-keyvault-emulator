@@ -1,8 +1,15 @@
 # azure-keyvault-emulator
 
-A clean-room, local emulator of the **Azure Key Vault data plane** — the third
-member of an emulator family built on one principle: **the same trust
-relationships as production**.
+[![CI](https://github.com/calvinchengx/azure-keyvault-emulator/actions/workflows/ci.yml/badge.svg)](https://github.com/calvinchengx/azure-keyvault-emulator/actions/workflows/ci.yml)
+[![Docs](https://github.com/calvinchengx/azure-keyvault-emulator/actions/workflows/docs-site.yml/badge.svg)](https://calvinchengx.github.io/azure-keyvault-emulator/)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+
+A clean-room, local emulator of the **Azure Key Vault data plane** — secrets,
+keys doing real RSA/EC cryptography, and X.509 certificates — the third member
+of an emulator family built on one principle: **the same trust relationships as
+production**.
+
+![azure-keyvault-emulator demo: the 401 challenge every Azure SDK follows, a real Entra token answering it, a secret round-tripped, and a real RS256 signature](docs/demo/demo.gif)
 
 - [entra-emulator](https://github.com/calvinchengx/entra-emulator) — the STS:
   issues the tokens.
@@ -65,6 +72,18 @@ A read-only **operator portal** (dashboard, object browsers, clock + fault
 controls) is embedded in the binary and served at
 `http://localhost:8444/_emulator/portal/` — no extra process.
 
+## Parity at a glance
+
+| | Rows | Meaning |
+|---|---|---|
+| 🟢 **Real** | 32 | Genuine work — real RSA/EC cryptography, real X.509 issuance, real token validation |
+| 🟡 **Emulated** | 13 | Faithful API contract and persisted state, but no engine behind it |
+| 🟠 **Partial** | 2 | The common path works; the edges are not there yet |
+| 🔴 **Not implemented** | 21 | The infrastructure *around* the vault — ARM, the HSM, private networking — which no localhost process can honestly provide |
+
+The real Azure SDKs (`azsecrets` / `azkeys` / `azcertificates`) drive it as
+borrowed oracles. Full detail: [parity map](docs/parity.md).
+
 ## Quick start
 
 Same three verbs on Linux, macOS and Windows — see
@@ -78,6 +97,19 @@ make status   # is the pair usable? (containers, endpoints, the 401 challenge)
 
 `make up PROFILE="--profile full"` adds fabric-emulator for the
 secret-as-SP-credential chain.
+
+The rest:
+
+```bash
+make help     # every target with a one-line description
+make ps       # container states
+make logs     # tail logs (SVC=<service> to narrow to one)
+make down     # stop and remove containers — volumes SURVIVE
+make clean    # stop and remove containers AND delete the data volumes
+make restart  # clean, then up
+make test     # go build, vet and unit tests
+make chain    # the secret-as-SP-credential chain, end to end
+```
 
 Docs: <https://calvinchengx.github.io/azure-keyvault-emulator/> — start with
 the [Quickstart](docs/01-quickstart.md), then
