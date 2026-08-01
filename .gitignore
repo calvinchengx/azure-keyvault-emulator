@@ -27,3 +27,6 @@ cover.out
 # Portal (Svelte) test artifacts — portal/dist IS committed (go:embed)
 portal/test-results/
 portal/playwright-report/
+
+# Python bytecode from scripts/
+__pycache__/
