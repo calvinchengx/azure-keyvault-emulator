@@ -30,7 +30,7 @@ func keyTags(v *store.KeyVersion) map[string]string {
 
 func (s *Service) keyAttrs(v *store.KeyVersion) attributes {
 	return attributes{
-		Enabled: &v.Enabled, NBF: v.NBF, Exp: v.Exp,
+		Enabled: &v.Enabled, Exportable: &v.Exportable, NBF: v.NBF, Exp: v.Exp,
 		Created: v.CreatedAt, Updated: v.UpdatedAt,
 		RecoveryLevel: s.recoveryLevel(), RecoverableDays: s.Cfg.SoftDeleteRetentionDays,
 	}
@@ -49,7 +49,11 @@ func (s *Service) keyBundle(w http.ResponseWriter, r *http.Request, v *store.Key
 		writeKVErr(w, http.StatusInternalServerError, "InternalServerError", err.Error())
 		return nil, false
 	}
-	return map[string]any{"key": jwk, "attributes": s.keyAttrs(v), "tags": keyTags(v)}, true
+	b := map[string]any{"key": jwk, "attributes": s.keyAttrs(v), "tags": keyTags(v)}
+	if v.ReleasePolicyJSON != "" {
+		b["release_policy"] = json.RawMessage(v.ReleasePolicyJSON)
+	}
+	return b, true
 }
 
 func keyNotFound(w http.ResponseWriter, name string) {
@@ -60,12 +64,13 @@ func keyNotFound(w http.ResponseWriter, name string) {
 // createKey is POST /keys/{name}/create.
 func (s *Service) createKey(w http.ResponseWriter, r *http.Request, vault string) {
 	var body struct {
-		Kty        string            `json:"kty"`
-		KeySize    int               `json:"key_size"`
-		Crv        string            `json:"crv"`
-		KeyOps     []string          `json:"key_ops"`
-		Attributes *attributes       `json:"attributes"`
-		Tags       map[string]string `json:"tags"`
+		Kty           string            `json:"kty"`
+		KeySize       int               `json:"key_size"`
+		Crv           string            `json:"crv"`
+		KeyOps        []string          `json:"key_ops"`
+		Attributes    *attributes       `json:"attributes"`
+		Tags          map[string]string `json:"tags"`
+		ReleasePolicy json.RawMessage   `json:"release_policy"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Kty == "" {
 		writeKVErr(w, http.StatusBadRequest, "BadParameter", "The request body must include kty.")
@@ -88,7 +93,13 @@ func (s *Service) createKey(w http.ResponseWriter, r *http.Request, vault string
 		if body.Attributes.Enabled != nil {
 			v.Enabled = *body.Attributes.Enabled
 		}
+		if body.Attributes.Exportable != nil {
+			v.Exportable = *body.Attributes.Exportable
+		}
 		v.NBF, v.Exp = body.Attributes.NBF, body.Attributes.Exp
+	}
+	if len(body.ReleasePolicy) > 0 {
+		v.ReleasePolicyJSON = string(body.ReleasePolicy)
 	}
 	if body.Tags != nil {
 		raw, _ := json.Marshal(body.Tags)

@@ -128,6 +128,8 @@ CREATE TABLE IF NOT EXISTS key_versions (
 	enabled INTEGER NOT NULL DEFAULT 1,
 	nbf INTEGER,
 	exp INTEGER,
+	exportable INTEGER NOT NULL DEFAULT 0,
+	release_policy_json TEXT NOT NULL DEFAULT '',
 	tags_json TEXT NOT NULL DEFAULT '{}',
 	created_at INTEGER NOT NULL,
 	updated_at INTEGER NOT NULL,
@@ -202,11 +204,16 @@ CREATE TABLE IF NOT EXISTS cert_ops_deleted (
 	if err != nil {
 		return err
 	}
-	// Pre-v0.4.0 databases lack the cancelled column; the duplicate-column
-	// error on re-add is the "already migrated" signal.
-	if _, aerr := s.db.Exec(`ALTER TABLE cert_pending ADD COLUMN cancelled INTEGER NOT NULL DEFAULT 0`); aerr != nil &&
-		!strings.Contains(aerr.Error(), "duplicate column") {
-		return aerr
+	// Older databases lack columns added since; the duplicate-column error
+	// on re-add is the "already migrated" signal.
+	for _, alter := range []string{
+		`ALTER TABLE cert_pending ADD COLUMN cancelled INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE key_versions ADD COLUMN exportable INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE key_versions ADD COLUMN release_policy_json TEXT NOT NULL DEFAULT ''`,
+	} {
+		if _, aerr := s.db.Exec(alter); aerr != nil && !strings.Contains(aerr.Error(), "duplicate column") {
+			return aerr
+		}
 	}
 	return nil
 }

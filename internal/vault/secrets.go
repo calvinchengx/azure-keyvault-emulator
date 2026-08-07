@@ -13,6 +13,7 @@ import (
 // attributes is the wire shape of secret attributes (7.5).
 type attributes struct {
 	Enabled         *bool  `json:"enabled,omitempty"`
+	Exportable      *bool  `json:"exportable,omitempty"`
 	NBF             *int64 `json:"nbf,omitempty"`
 	Exp             *int64 `json:"exp,omitempty"`
 	Created         int64  `json:"created,omitempty"`

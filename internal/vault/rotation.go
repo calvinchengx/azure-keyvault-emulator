@@ -96,6 +96,7 @@ func mintRotation(cur *store.KeyVersion) (*store.KeyVersion, error) {
 	return &store.KeyVersion{
 		Vault: cur.Vault, Name: cur.Name, Kty: cur.Kty, Crv: crv, PrivateDER: der,
 		Enabled: true, KeyOpsJSON: cur.KeyOpsJSON, TagsJSON: cur.TagsJSON,
+		Exportable: cur.Exportable, ReleasePolicyJSON: cur.ReleasePolicyJSON,
 	}, nil
 }
 

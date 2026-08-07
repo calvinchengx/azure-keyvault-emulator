@@ -22,14 +22,19 @@ type KeyVersion struct {
 	TagsJSON   string
 	CreatedAt  int64
 	UpdatedAt  int64
+	// Exportable + ReleasePolicyJSON drive Secure Key Release: only an
+	// exportable key may be released, as in real Key Vault.
+	Exportable        bool
+	ReleasePolicyJSON string
 }
 
-const kvCols = `vault, name, version, kty, crv, private_der, key_ops_json, enabled, nbf, exp, tags_json, created_at, updated_at`
+const kvCols = `vault, name, version, kty, crv, private_der, key_ops_json, enabled, nbf, exp, tags_json, created_at, updated_at, exportable, release_policy_json`
 
 func scanKV(row interface{ Scan(...any) error }) (*KeyVersion, error) {
 	v := &KeyVersion{}
 	err := row.Scan(&v.Vault, &v.Name, &v.Version, &v.Kty, &v.Crv, &v.PrivateDER,
-		&v.KeyOpsJSON, &v.Enabled, &v.NBF, &v.Exp, &v.TagsJSON, &v.CreatedAt, &v.UpdatedAt)
+		&v.KeyOpsJSON, &v.Enabled, &v.NBF, &v.Exp, &v.TagsJSON, &v.CreatedAt, &v.UpdatedAt,
+		&v.Exportable, &v.ReleasePolicyJSON)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -54,9 +59,10 @@ func (s *Store) SetKey(v *KeyVersion) error {
 	if v.KeyOpsJSON == "" {
 		v.KeyOpsJSON = "[]"
 	}
-	_, err := s.db.Exec(`INSERT INTO key_versions (`+kvCols+`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+	_, err := s.db.Exec(`INSERT INTO key_versions (`+kvCols+`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		v.Vault, v.Name, v.Version, v.Kty, v.Crv, v.PrivateDER, v.KeyOpsJSON,
-		v.Enabled, v.NBF, v.Exp, v.TagsJSON, v.CreatedAt, v.UpdatedAt)
+		v.Enabled, v.NBF, v.Exp, v.TagsJSON, v.CreatedAt, v.UpdatedAt,
+		v.Exportable, v.ReleasePolicyJSON)
 	return err
 }
 
