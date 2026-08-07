@@ -115,6 +115,54 @@ surface the operation):
       current SDKs send; the create-operation LRO now reports
       `inProgress` → `completed` as the real service does.
 
+## P6 — remaining distance to full parity *(shipped in v0.5.0)*
+
+The whole remaining gap between the emulator and real Key Vault, in three
+honesty grades. Everything not listed here is either already 🟢 in
+[parity.md](parity.md) or a declared scope boundary (ARM, Managed HSM,
+networking, attestation, live CAs) where full parity *means keeping the
+refusal faithful*.
+
+**Closable for real** (the emulator genuinely does the work):
+
+- [x] **`nbf`/`exp` enforced on key crypto operations** — sign/verify/
+      encrypt/decrypt/wrap/unwrap with an expired or not-yet-valid key returns
+      `403 Forbidden`, as real Key Vault refuses; deterministic on the
+      controllable clock. Object retrieval stays permissive (as in real KV,
+      where reads return the object and its attributes).
+- [x] **Certificate delete cascade** — closing the documented divergence:
+      deleting a certificate soft-deletes its linked key and secret; recover
+      and purge carry them along too.
+- [x] **Opaque backup blobs** — backup output becomes a sealed blob (AEAD
+      under an emulator-held key persisted in the data dir), restorable only
+      by the same emulator instance — the honest analog of real Key Vault's
+      same-subscription/geography restore rule. Transparent-JSON blobs from
+      earlier versions stop restoring.
+- [x] **Multiple trusted issuers** — `KV_ENTRA_ISSUER` accepts a
+      comma-separated list; tokens from any listed issuer validate against
+      that issuer's JWKS. The 401 challenge advertises the first.
+- [x] **Auto-rotation from the rotation policy** — the stored policy acts:
+      when a `lifetimeActions` rotate trigger (`timeAfterCreate`, ISO-8601)
+      elapses on the emulator clock, the next read of the key lazily mints a
+      new version, with `attributes.expiryTime` driving the new version's
+      `exp` — the same lazy clock-driven pattern as soft-delete retention.
+
+**Emulatable contract** (real document shapes + real enforcement, no ARM):
+
+- [x] **Access policies** — `POST /_emulator/access-policy` accepts the real
+      vault access-policy document (`objectId` +
+      `permissions: {secrets, keys, certificates}`) and compiles it onto the
+      internal per-principal op allowlist.
+- [x] **RBAC built-in roles** — `POST /_emulator/rbac` assigns the real
+      built-in roles (Key Vault Administrator, Secrets User/Officer, Crypto
+      User/Officer, Certificates User/Officer, Reader) by name, expanded to
+      their documented data-plane operation sets on the same allowlist.
+
+Sequencing: enforcement first (nbf/exp, cascade — small, immediately
+SDK-witnessable), then sealing + multi-issuer, then the rotation engine, then
+authorization. Each lands with Go tests inside the ≥90% floor; the Python
+suite witnesses the expiry refusal with a real SDK.
+
 ## Cross-cutting (throughout)
 
 - [x] CI: vet/build/test + 90% coverage floor + the three-emulator chain e2e.

@@ -16,7 +16,7 @@ Software-protected only (no HSM).
 | `GET /keys` \| `/keys/{name}/versions` | list (paged) |
 | `DELETE /keys/{name}` | soft-delete |
 | `POST /keys/{name}/backup` · `POST /keys/restore` | opaque backup blob (all versions) → restore into an empty name |
-| `GET` \| `PUT /keys/{name}/rotationpolicy` | rotation policy (round-tripped; unset returns the disabled-rotation default) |
+| `GET` \| `PUT /keys/{name}/rotationpolicy` | rotation policy — and it **acts**: a `Rotate` trigger's `timeAfterCreate` rotates lazily on the emulator clock; `attributes.expiryTime` sets the new version's `exp` |
 | `POST /keys/{name}/rotate` | on-demand rotation: a new version with fresh material of the same type/size; `key_ops`/tags carry over |
 | `POST /keys/{name}/{version}/release` | Secure Key Release → `{value}` (a signed JWS carrying the released public JWK) |
 | `GET/DELETE /deletedkeys/{name}`, `GET /deletedkeys`, `POST /deletedkeys/{name}/recover` | deleted-key lifecycle |
@@ -48,6 +48,9 @@ Vault signs a digest), matching AKV semantics.
 `key_ops` is **enforced**: an operation outside the key's list returns
 `403 Forbidden`, and because the returned JWK carries the same `key_ops`,
 SDKs that run public-key operations locally refuse them client-side too.
+`nbf`/`exp` are enforced for cryptographic use as well — an expired or
+not-yet-valid key refuses crypto (`403`) on the emulator clock, while plain
+reads stay permissive, exactly as real Key Vault behaves.
 
 ## Supported key types
 

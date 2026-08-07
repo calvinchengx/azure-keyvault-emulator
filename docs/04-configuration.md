@@ -7,7 +7,7 @@ both are set. Only the Entra issuer is required.
 |---|---|---|---|
 | `--addr` | `KV_ADDR` | `:8444` | Listen address. |
 | `--data-dir` | `KV_DATA_DIR` | *(empty)* | State directory (SQLite + persisted TLS cert). Empty = in-memory DB and ephemeral TLS keys. |
-| `--entra-issuer` | `KV_ENTRA_ISSUER` | *(required)* | The exact `iss` bearer tokens must carry, e.g. `https://localhost:8443/{tenant}/v2.0`. An entra-emulator or real Entra v2.0 issuer. |
+| `--entra-issuer` | `KV_ENTRA_ISSUER` | *(required)* | The exact `iss` bearer tokens must carry, e.g. `https://localhost:8443/{tenant}/v2.0`. An entra-emulator or real Entra v2.0 issuer. A comma-separated list trusts several issuers, each validated against its own JWKS; the 401 challenge advertises the first. |
 | `--entra-jwks-url` | `KV_ENTRA_JWKS_URL` | *(derived)* | Where signing keys are fetched. Derived from the issuer when unset (`{issuer − /v2.0}/discovery/v2.0/keys`). |
 | `--entra-tls-insecure` | `KV_ENTRA_TLS_INSECURE` | `false` | Skip TLS verification when fetching JWKS — for entra-emulator's self-signed cert on a compose network. |
 | `--default-vault` | `KV_DEFAULT_VAULT` | `emulator` | The vault served on non-vault hosts (`localhost`, IPs). |

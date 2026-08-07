@@ -39,7 +39,7 @@ therefore means "absent", not "honestly refused".
 | Entra bearer challenge (`401` + `WWW-Authenticate`) | Tokenless request returns the real challenge — `Bearer authorization="…", resource="https://vault.azure.net"` with AKV code `AKV10000`; unmodified `azidentity` walks it | 🟢 Real |
 | Token validation (RS256 / JWKS / issuer / audience / expiry) | Signature verified **before any claim is read**; issuer + audience (string or array) + `exp`/`nbf` with 60s skew, on the emulator's controllable clock; JWKS cached by `kid`, refetched once on miss | 🟢 Real |
 | Principal derivation (`oid` → `sub`; `idtyp=app` → service principal) | Full | 🟢 Real |
-| Multi-tenant / multiple trusted issuers | Exactly one issuer is configured | 🔴 Not implemented |
+| Multiple trusted issuers | `KV_ENTRA_ISSUER` accepts a comma-separated list; each issuer validates against its **own** JWKS, and the verifying key is bound to the token's `iss` | 🟢 Real |
 
 ## Secrets (`secrets/`)
 
@@ -48,8 +48,8 @@ therefore means "absent", not "honestly refused".
 | Set / get / list / list-versions, get by version | Full; real bytes persisted | 🟢 Real |
 | Versioning (32-hex version per write) | Full — every write mints a new version | 🟢 Real |
 | Attributes `enabled` | Enforced — a disabled object is refused | 🟢 Real |
-| Attributes `nbf` / `exp` | Stored and returned, **informational only** — deliberately not enforced, matching the documented emulator posture | 🟡 Emulated |
-| Backup / restore | Round-trips a base64url JSON blob (name + versions), not an opaque encrypted blob as real Key Vault emits | 🟡 Emulated |
+| Attributes `nbf` / `exp` | Stored and returned; retrieval stays permissive — exactly real Key Vault's behaviour (expired secrets still read; consuming code decides) | 🟢 Real |
+| Backup / restore | An **opaque sealed blob** (AEAD under an emulator-held key), restorable only by the same emulator instance — the honest analog of the same-subscription/geography rule | 🟢 Real |
 
 ## Keys (`keys/`)
 
@@ -64,12 +64,13 @@ therefore means "absent", not "honestly refused".
 | Public JWK exposure (private material never leaves) | Full — private PKCS#8 stays in the store | 🟢 Real |
 | `RSA-HSM` / `EC-HSM` key types | Accepted, then **silently normalised to software keys** — no HSM exists | 🟡 Emulated |
 | Secure Key Release (`/release`) | Real signed JWS with a fresh signer and public JWK header, but **no attestation** — the claim is self-declared | 🟡 Emulated |
-| Key rotation **policy** (get/set) | Stored and round-tripped verbatim; does not drive rotation attributes | 🟡 Emulated |
+| Key rotation **policy** (get/set) | Stored, round-tripped, and **acting**: a `Rotate` trigger's `timeAfterCreate` rotates lazily on the emulator clock; `expiryTime` drives the new version's `exp` | 🟢 Real |
+| `nbf` / `exp` enforced for cryptographic use | Crypto with an expired or not-yet-valid key returns `403`, as real Key Vault refuses; reads stay permissive | 🟢 Real |
 | Rotate key (`POST /keys/{name}/rotate`) | Real: a new version with fresh material of the same type and size; `key_ops` and tags carry over | 🟢 Real |
 | `key_ops` enforcement | Enforced — an operation outside the key's `key_ops` gets `403 Forbidden`, and the JWK's `key_ops` drives SDK-local refusal too | 🟢 Real |
 | `oct` / `oct-HSM` symmetric keys (and their AES algorithms) | Refused with the real error — vaults hold RSA/EC only; symmetric keys require **Managed HSM**, which is out of scope below | 🟢 Real |
 | **BYOK** (KEK-wrapped import) | — import takes raw private members only | 🔴 Not implemented |
-| Key backup / restore | Round-trips a JSON blob carrying the private DER, not an opaque encrypted blob | 🟡 Emulated |
+| Key backup / restore | An opaque sealed blob (AEAD, emulator-held key) — private material never rides in a readable blob | 🟢 Real |
 
 ## Certificates (`certificates/`)
 
@@ -82,9 +83,9 @@ therefore means "absent", not "honestly refused".
 | Certificate signing request (PKCS#10) for a named issuer | Real CSR; the operation reports `inProgress` with the CSR bytes | 🟢 Real |
 | Merge a signed chain | Real — and the leaf's public key is **verified to match the pending key** before merge (400 otherwise) | 🟢 Real |
 | **Issuance by a real CA** | The emulator generates the key and a real CSR and merges the chain **your** CA signs — real X.509 only when you attach that CA | 🟠 BYO-engine |
-| Delete cascade to the linked key/secret | **Diverges from real Key Vault**: creation cascades, deletion does not, so delete → purge → restore can leave the linked objects behind | 🟡 Emulated |
+| Delete cascade to the linked key/secret | Deletion, recovery and purge carry the linked key and secret, as the three-views-of-one-object model requires | 🟢 Real |
 | Issuers / contacts | Opaque document round-trip; they do **not** drive issuance | 🟡 Emulated |
-| Certificate backup / restore | Round-trips a JSON blob, not an opaque encrypted blob | 🟡 Emulated |
+| Certificate backup / restore | An opaque sealed blob (AEAD, emulator-held key) | 🟢 Real |
 | Cancel / delete a certificate operation | Cancel marks an in-progress operation `cancelled` (merge is then refused); delete removes the operation until the next create restores it | 🟢 Real |
 | Create operation LRO shape (`inProgress` on create → `completed` on poll) | As real Key Vault reports it — the shape the SDK pollers depend on | 🟢 Real |
 
@@ -113,8 +114,8 @@ therefore means "absent", not "honestly refused".
 | Key Vault feature | Emulator | Type |
 |---|---|---|
 | Data-plane authorization | A per-principal operation allowlist (`POST /_emulator/permissions`, ops named `{type}/{op}`, `*` wildcard); empty = full access | 🟡 Emulated |
-| **RBAC data-plane roles** (Key Vault Secrets User, …) | — | 🔴 Not implemented |
-| **Access policies** (the classic vault access-policy document) | — | 🔴 Not implemented |
+| RBAC data-plane roles (Key Vault Secrets User, …) | The real built-in roles by name (`POST /_emulator/rbac`), expanded to their documented data-action sets and enforced per principal — assignment via the control surface, not ARM | 🟡 Emulated |
+| Access policies (the classic vault access-policy document) | The real document shape (`objectId` + `permissions:{secrets,keys,certificates}`, incl. `all`) accepted at `POST /_emulator/access-policy` and enforced; unknown permission names refused | 🟡 Emulated |
 
 ## Emulator-only (no Key Vault equivalent — these exist for testing)
 
