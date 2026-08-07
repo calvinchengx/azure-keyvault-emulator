@@ -31,7 +31,7 @@ func New(cfg *config.Config, jwksClient *http.Client) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	v := auth.New(cfg.EntraIssuer, cfg.EntraJWKSURL, cfg.EntraTLSInsecure, ck.Now, jwksClient)
+	v := auth.NewMulti(cfg.IssuerJWKS(), cfg.EntraTLSInsecure, ck.Now, jwksClient)
 	kv := vault.New(cfg, st, v)
 
 	s := &Server{Cfg: cfg, Store: st, Clock: ck, Vault: kv, mux: http.NewServeMux()}
@@ -114,6 +114,44 @@ func (s *Server) registerControl() {
 		}
 		s.Vault.SetPermissions(perms)
 		writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
+	})
+	// The real vault access-policy document, compiled onto the same
+	// per-principal allowlist /_emulator/permissions writes (last writer
+	// wins). {"accessPolicies": []} restores full access.
+	s.mux.HandleFunc("POST /_emulator/access-policy", func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			AccessPolicies []vault.AccessPolicyEntry `json:"accessPolicies"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "malformed JSON"})
+			return
+		}
+		perms, err := vault.CompileAccessPolicies(body.AccessPolicies)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+			return
+		}
+		s.Vault.SetPermissions(perms)
+		writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "principals": len(perms)})
+	})
+	// Built-in RBAC role assignments ({"assignments":[{"principalId","role"}]}),
+	// expanded to their documented data-plane op sets on the same allowlist.
+	// {"assignments": []} restores full access.
+	s.mux.HandleFunc("POST /_emulator/rbac", func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Assignments []vault.RoleAssignment `json:"assignments"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "malformed JSON"})
+			return
+		}
+		perms, err := vault.CompileRBAC(body.Assignments)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+			return
+		}
+		s.Vault.SetPermissions(perms)
+		writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "principals": len(perms)})
 	})
 	// Vault-level purge protection ({"enabled": true}): purge is refused and
 	// recoveryLevel reports "Recoverable" while on. Real Key Vault can only

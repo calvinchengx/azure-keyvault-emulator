@@ -9,8 +9,10 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/calvinchengx/azure-keyvault-emulator/internal/clock"
 	_ "modernc.org/sqlite"
@@ -24,8 +26,12 @@ var ErrConflict = errors.New("conflict")
 
 // Store wraps the database plus the emulator clock.
 type Store struct {
-	db    *sql.DB
-	Clock *clock.Clock
+	db      *sql.DB
+	Clock   *clock.Clock
+	dataDir string
+
+	sealMu  sync.Mutex
+	sealKey []byte
 }
 
 // Open opens (creating if needed) the database in dataDir; empty = in-memory.
@@ -39,12 +45,47 @@ func Open(dataDir string, ck *clock.Clock) (*Store, error) {
 		return nil, fmt.Errorf("open sqlite: %w", err)
 	}
 	db.SetMaxOpenConns(1)
-	s := &Store{db: db, Clock: ck}
+	s := &Store{db: db, Clock: ck, dataDir: dataDir}
 	if err := s.migrate(); err != nil {
 		db.Close()
 		return nil, err
 	}
 	return s, nil
+}
+
+// SealKey returns the 32-byte key that seals backup blobs, creating and
+// persisting it beside the database on first use — so a blob restores only
+// into the same emulator instance, the honest analog of real Key Vault's
+// same-subscription/geography restore rule. In-memory stores get an
+// ephemeral key.
+func (s *Store) SealKey() ([]byte, error) {
+	s.sealMu.Lock()
+	defer s.sealMu.Unlock()
+	if s.sealKey != nil {
+		return s.sealKey, nil
+	}
+	if s.dataDir != "" {
+		p := filepath.Join(s.dataDir, "backup.key")
+		if b, err := os.ReadFile(p); err == nil && len(b) == 32 {
+			s.sealKey = b
+			return b, nil
+		}
+		b := make([]byte, 32)
+		if _, err := rand.Read(b); err != nil {
+			return nil, err
+		}
+		if err := os.WriteFile(p, b, 0o600); err != nil {
+			return nil, err
+		}
+		s.sealKey = b
+		return b, nil
+	}
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return nil, err
+	}
+	s.sealKey = b
+	return b, nil
 }
 
 // Close closes the database.

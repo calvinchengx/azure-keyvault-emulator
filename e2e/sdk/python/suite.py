@@ -107,6 +107,17 @@ def main():
     except HttpResponseError as e:
         check("key_ops enforced", e.status_code == 403, f"got {e.status_code}")
 
+    import datetime
+    past = datetime.datetime(2020, 1, 1, tzinfo=datetime.timezone.utc)
+    stale = kc.create_rsa_key("py-e2e-expired", size=2048, expires_on=past)
+    ecc = CryptographyClient(
+        f"{KV_URL}/keys/{stale.name}/{stale.properties.version}", cred, **kw)
+    try:
+        ecc.sign(SignatureAlgorithm.rs256, digest)
+        check("expired key refused for crypto", False)
+    except HttpResponseError as e:
+        check("expired key refused for crypto", e.status_code == 403, f"got {e.status_code}")
+
     # --- Certificates: self-signed issuance via the LRO poller ---
     print("CertificateClient")
     cert_client = CertificateClient(KV_URL, cred, **kw)

@@ -34,23 +34,36 @@ type Principal struct {
 	App  string // appid claim when present
 }
 
-// Validator verifies RS256 bearer tokens against a JWKS.
+// issuerSet is one trusted issuer with its JWKS cache.
+type issuerSet struct {
+	issuer  string
+	jwksURL string
+	keys    map[string]*rsa.PublicKey // kid → key
+}
+
+// Validator verifies RS256 bearer tokens against one or more trusted
+// issuers' JWKS. The key that verifies a token's signature is bound to its
+// issuer: the token's iss claim must name the issuer that key came from.
 type Validator struct {
-	Issuer    string
 	Audiences []string
 	Now       func() int64 // emulator clock
 
-	jwksURL string
-	client  *http.Client
+	client *http.Client
 
-	mu   sync.RWMutex
-	keys map[string]*rsa.PublicKey // kid → key
+	mu      sync.RWMutex
+	issuers []*issuerSet
 }
 
-// New builds a Validator fetching keys from jwksURL. insecure skips TLS
-// verification (entra-emulator's self-signed cert on a compose network).
-// client overrides the HTTP client when non-nil (in-process tests).
+// New builds a single-issuer Validator fetching keys from jwksURL. insecure
+// skips TLS verification (entra-emulator's self-signed cert on a compose
+// network). client overrides the HTTP client when non-nil (in-process tests).
 func New(issuer, jwksURL string, insecure bool, now func() int64, client *http.Client) *Validator {
+	return NewMulti([][2]string{{issuer, jwksURL}}, insecure, now, client)
+}
+
+// NewMulti builds a Validator trusting several issuers — ordered
+// {issuer, jwksURL} pairs, as real Key Vault trusts any issuer of its tenant.
+func NewMulti(pairs [][2]string, insecure bool, now func() int64, client *http.Client) *Validator {
 	if client == nil {
 		tr := http.DefaultTransport.(*http.Transport).Clone()
 		if insecure {
@@ -58,10 +71,11 @@ func New(issuer, jwksURL string, insecure bool, now func() int64, client *http.C
 		}
 		client = &http.Client{Transport: tr}
 	}
-	return &Validator{
-		Issuer: issuer, Audiences: VaultAudiences, Now: now,
-		jwksURL: jwksURL, client: client, keys: map[string]*rsa.PublicKey{},
+	v := &Validator{Audiences: VaultAudiences, Now: now, client: client}
+	for _, p := range pairs {
+		v.issuers = append(v.issuers, &issuerSet{issuer: p[0], jwksURL: p[1], keys: map[string]*rsa.PublicKey{}})
 	}
+	return v
 }
 
 // Errors distinguished for the API's 401 bodies.
@@ -97,7 +111,7 @@ func (v *Validator) Validate(token string) (*Principal, error) {
 	if err := json.Unmarshal(headB, &head); err != nil || head.Alg != "RS256" {
 		return nil, fmt.Errorf("%w: unsupported alg", ErrBadToken)
 	}
-	key, err := v.key(head.Kid)
+	key, keyIssuer, err := v.key(head.Kid)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrBadToken, err)
 	}
@@ -127,7 +141,7 @@ func (v *Validator) Validate(token string) (*Principal, error) {
 	if err := json.Unmarshal(payloadB, &claims); err != nil {
 		return nil, fmt.Errorf("%w: claims", ErrBadToken)
 	}
-	if claims.Iss != v.Issuer {
+	if claims.Iss != keyIssuer {
 		return nil, fmt.Errorf("%w: issuer %q not trusted", ErrBadToken, claims.Iss)
 	}
 	if !audMatch(claims.Aud, v.Audiences) {
@@ -181,28 +195,38 @@ func audMatch(raw json.RawMessage, accepted []string) bool {
 	return false
 }
 
-// key returns the RSA key for kid, refetching the JWKS once on a miss (key
-// rotation, first use).
-func (v *Validator) key(kid string) (*rsa.PublicKey, error) {
+// key returns the RSA key for kid and the issuer it belongs to, refetching
+// each issuer's JWKS once on a miss (key rotation, first use).
+func (v *Validator) key(kid string) (*rsa.PublicKey, string, error) {
 	v.mu.RLock()
-	k := v.keys[kid]
-	v.mu.RUnlock()
-	if k != nil {
-		return k, nil
+	for _, set := range v.issuers {
+		if k := set.keys[kid]; k != nil {
+			v.mu.RUnlock()
+			return k, set.issuer, nil
+		}
 	}
-	if err := v.refresh(); err != nil {
-		return nil, err
+	v.mu.RUnlock()
+	var lastErr error
+	for _, set := range v.issuers {
+		if err := v.refresh(set); err != nil {
+			lastErr = err
+		}
 	}
 	v.mu.RLock()
 	defer v.mu.RUnlock()
-	if k := v.keys[kid]; k != nil {
-		return k, nil
+	for _, set := range v.issuers {
+		if k := set.keys[kid]; k != nil {
+			return k, set.issuer, nil
+		}
 	}
-	return nil, fmt.Errorf("no key %q in JWKS", kid)
+	if lastErr != nil {
+		return nil, "", lastErr
+	}
+	return nil, "", fmt.Errorf("no key %q in any trusted issuer's JWKS", kid)
 }
 
-func (v *Validator) refresh() error {
-	resp, err := v.client.Get(v.jwksURL)
+func (v *Validator) refresh(set *issuerSet) error {
+	resp, err := v.client.Get(set.jwksURL)
 	if err != nil {
 		return fmt.Errorf("fetch JWKS: %w", err)
 	}
@@ -243,7 +267,7 @@ func (v *Validator) refresh() error {
 		return errors.New("JWKS contained no RSA keys")
 	}
 	v.mu.Lock()
-	v.keys = fresh
+	set.keys = fresh
 	v.mu.Unlock()
 	return nil
 }

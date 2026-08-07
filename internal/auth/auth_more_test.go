@@ -27,7 +27,7 @@ func TestJWKSFailureModes(t *testing.T) {
 	for name, h := range cases {
 		srv := httptest.NewServer(h)
 		v := New("iss", srv.URL, false, func() int64 { return 0 }, srv.Client())
-		if _, err := v.key("k"); err == nil {
+		if _, _, err := v.key("k"); err == nil {
 			t.Errorf("%s: key() succeeded; want error", name)
 		}
 		srv.Close()
@@ -35,7 +35,7 @@ func TestJWKSFailureModes(t *testing.T) {
 
 	// Unreachable JWKS host.
 	v := New("iss", "http://127.0.0.1:1/keys", false, func() int64 { return 0 }, nil)
-	if _, err := v.key("k"); err == nil {
+	if _, _, err := v.key("k"); err == nil {
 		t.Error("unreachable JWKS: key() succeeded")
 	}
 }
@@ -48,11 +48,11 @@ func TestNewInsecureTransport(t *testing.T) {
 	}))
 	defer srv.Close()
 	strict := New("iss", srv.URL, false, func() int64 { return 0 }, nil)
-	if err := strict.refresh(); err == nil {
+	if err := strict.refresh(strict.issuers[0]); err == nil {
 		t.Fatal("strict client accepted a self-signed JWKS cert")
 	}
 	insecure := New("iss", srv.URL, true, func() int64 { return 0 }, nil)
-	if err := insecure.refresh(); err != nil {
+	if err := insecure.refresh(insecure.issuers[0]); err != nil {
 		t.Fatalf("insecure client rejected: %v", err)
 	}
 }
