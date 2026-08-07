@@ -336,5 +336,40 @@
     "witnesses": [
       "go:TestBackupBlobsAreSealed"
     ]
+  },
+  "byok-kek-wrapped-import": {
+    "section": "Keys (`keys/`)",
+    "claim": "**BYOK** (KEK-wrapped import)",
+    "witnesses": [
+      "go:TestBYOKImportRoundTrip",
+      "go:TestAESKWPVectors"
+    ]
+  },
+  "issuers-contacts": {
+    "section": "Certificates (`certificates/`)",
+    "claim": "Issuers / contacts",
+    "witnesses": [
+      "go:TestAzcertificatesMerge",
+      "go:TestAzcertificatesIssuers"
+    ]
+  },
+  "soft-delete-list-deleted-recover-purge-secrets-keys-certificates": {
+    "section": "Soft-delete & recovery",
+    "claim": "Soft-delete \u2192 list-deleted \u2192 recover \u2192 purge (secrets, keys, certificates)",
+    "witnesses": [
+      "go:TestAzureSDKChallengeFlowAndSecretLifecycle",
+      "go:TestCertDeleteCascade",
+      "ci:python-sdk",
+      "ci:js-sdk",
+      "ci:dotnet-sdk"
+    ]
+  },
+  "retention-window-expiry": {
+    "section": "Soft-delete & recovery",
+    "claim": "Retention window expiry",
+    "witnesses": [
+      "go:TestKeySoftDeleteHandlers",
+      "go:TestCertSoftDeleteHandlers"
+    ]
   }
 }

@@ -11,7 +11,7 @@ end. Same versioning + soft-delete skeleton as
 
 | Method + path | Purpose |
 |---|---|
-| `POST /certificates/{name}/create` | `Self` issuer → self-signed cert; a named issuer → pending operation with a CSR |
+| `POST /certificates/{name}/create` | `Self` issuer → self-signed cert; a named issuer → pending operation with a CSR. A named issuer must be **registered** under `/certificates/issuers` first (`Unknown` = external-CSR escape hatch), as real KV requires |
 | `POST /certificates/{name}/import` | import a base64 PKCS#12 (PFX) or PEM bundle |
 | `POST /certificates/{name}/pending/merge` | complete a pending operation with the signed chain (`{x5c}`) |
 | `GET /certificates/{name}/pending` | the certificate operation (poll) — `inProgress`+CSR, `cancelled`, or `completed` |
