@@ -61,7 +61,9 @@ func TestAzcertificatesSelfSignedLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateCertificate via real SDK: %v", err)
 	}
-	if created.Status == nil || *created.Status != "completed" {
+	// Real Key Vault reports the create operation "inProgress" (issuance is
+	// asynchronous there, even for Self); "completed" appears on the poll.
+	if created.Status == nil || *created.Status != "inProgress" {
 		t.Fatalf("operation status = %v", created.Status)
 	}
 
