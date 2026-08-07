@@ -75,6 +75,25 @@ is `403 Forbidden`. Operation names are `{type}/{op}` (`secrets/set`,
 restores full access. This models access-policy *semantics* without pretending
 to be ARM ([Architecture § Authorization](03-architecture.md)).
 
+Two higher-level front-ends compile onto the same allowlist (last writer
+wins), using the documents real code uses:
+
+```bash
+# The real vault access-policy shape (per-type permission names, "all" works):
+curl -sk -X POST https://localhost:8444/_emulator/access-policy \
+  -d '{"accessPolicies":[{"objectId":"<oid>","permissions":{"secrets":["get","list"],"keys":["sign","verify"]}}]}'
+
+# The real RBAC built-in roles by name:
+curl -sk -X POST https://localhost:8444/_emulator/rbac \
+  -d '{"assignments":[{"principalId":"<oid>","role":"Key Vault Secrets User"}]}'
+```
+
+Known roles: Key Vault Administrator, Reader, Secrets User/Officer, Crypto
+User/Officer, Crypto Service Encryption User, Certificate User, Certificates
+Officer. Unknown permission or role names are refused (400), so a typo cannot
+silently widen access. `{"accessPolicies": []}` / `{"assignments": []}`
+restore full access.
+
 ## localhost vs DNS-pinned
 
 The SDK's challenge-resource verification expects the vault host to end in

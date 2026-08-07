@@ -21,7 +21,7 @@ end. Same versioning + soft-delete skeleton as
 | `PATCH /certificates/{name}` \| `/certificates/{name}/{version}` | update attributes/tags (and policy if supplied) |
 | `GET` \| `PATCH /certificates/{name}/policy` | get / update the certificate policy |
 | `GET /certificates` \| `/certificates/{name}/versions` | list (paged) |
-| `DELETE /certificates/{name}` | soft-delete |
+| `DELETE /certificates/{name}` | soft-delete — **cascades** to the linked key and secret (recover and purge carry them too) |
 | `POST /certificates/{name}/backup` · `POST /certificates/restore` | opaque backup blob → restore into an empty name |
 | `GET/DELETE /deletedcertificates/{name}`, `GET /deletedcertificates`, `POST /deletedcertificates/{name}/recover` | deleted-certificate lifecycle |
 
