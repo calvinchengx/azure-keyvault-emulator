@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"math/big"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/calvinchengx/azure-keyvault-emulator/internal/store"
@@ -310,6 +311,19 @@ func (s *Service) pendingOperation(r *http.Request, p *store.PendingCert) map[st
 // createPendingCertificate starts an external-issuer operation: generate the
 // key + CSR, store it pending, and return the in-progress operation.
 func (s *Service) createPendingCertificate(w http.ResponseWriter, r *http.Request, vault, name string, pol certPolicy, policyRaw json.RawMessage) {
+	// A named issuer must be registered in the vault's issuer store, as real
+	// Key Vault requires; the literal "Unknown" is the escape hatch for a
+	// caller-managed external CSR flow.
+	if !strings.EqualFold(pol.IssuerRef.Name, "Unknown") {
+		if _, err := s.Store.GetCertIssuer(vault, pol.IssuerRef.Name); errors.Is(err, store.ErrNotFound) {
+			writeKVErr(w, http.StatusBadRequest, "BadParameter",
+				fmt.Sprintf("Issuer %q is not registered in this vault. Register it under /certificates/issuers, or use issuer \"Unknown\".", pol.IssuerRef.Name))
+			return
+		} else if err != nil {
+			writeKVErr(w, http.StatusInternalServerError, "InternalServerError", err.Error())
+			return
+		}
+	}
 	if _, err := s.Store.GetDeletedCert(vault, name); err == nil {
 		writeKVErr(w, http.StatusConflict, "Conflict",
 			"Certificate is in a deleted but recoverable state; recover or purge it first.")
