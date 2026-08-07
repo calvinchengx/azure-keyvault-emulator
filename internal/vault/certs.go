@@ -211,8 +211,11 @@ func certNotFound(w http.ResponseWriter, name string) {
 }
 
 // createCertificate is POST /certificates/{name}/create. Issuance is
-// synchronous (self-signed), so the operation is returned already completed —
-// the SDK polls /pending once and proceeds.
+// synchronous internally (self-signed), but the create response reports
+// "inProgress" as real Key Vault does — issuance there is asynchronous even
+// for Self. The SDK then polls /pending, which reports "completed". The
+// Python SDK's LROPoller depends on this two-step: an already-"completed"
+// create response makes it skip its polling thread and resolve to nothing.
 func (s *Service) createCertificate(w http.ResponseWriter, r *http.Request, vault string) {
 	name := r.PathValue("name")
 	var body struct {
@@ -266,7 +269,7 @@ func (s *Service) createCertificate(w http.ResponseWriter, r *http.Request, vaul
 		writeKVErr(w, http.StatusInternalServerError, "InternalServerError", err.Error())
 		return
 	}
-	writeJSON(w, http.StatusAccepted, s.certOperation(r, name, "completed"))
+	writeJSON(w, http.StatusAccepted, s.certOperation(r, name, "inProgress"))
 }
 
 // certOperation is the CertificateOperation shape the SDK polls.

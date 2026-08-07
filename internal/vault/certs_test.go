@@ -39,7 +39,7 @@ func TestCreateCertificateBranches(t *testing.T) {
 	}
 	var op struct{ Status, Target string }
 	_ = json.Unmarshal(w.Body.Bytes(), &op)
-	if op.Status != "completed" {
+	if op.Status != "inProgress" {
 		t.Fatalf("op = %+v", op)
 	}
 	// Materialized key + secret exist under the same name.
