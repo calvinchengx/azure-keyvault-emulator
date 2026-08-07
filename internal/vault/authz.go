@@ -144,14 +144,20 @@ var builtinRoles = map[string][]string{
 	"key vault certificates officer": allOf(certPerms),
 }
 
-// RoleAssignment assigns a built-in role to a principal.
+// RoleAssignment assigns a built-in role to a principal, optionally scoped
+// to one object ("/keys/{name}", "/secrets/{name}", "/certificates/{name}"),
+// as data-plane RBAC assignments can be.
 type RoleAssignment struct {
 	PrincipalID string `json:"principalId"`
 	Role        string `json:"role"`
+	Scope       string `json:"scope"`
 }
 
 // CompileRBAC expands role assignments to the op allowlist; assignments for
-// the same principal merge, as role assignments do.
+// the same principal merge, as role assignments do. A scoped assignment
+// keeps only the role's operations of the scope's object type, each bound to
+// the object name — operations without an object (list, restore) need a
+// vault-level (unscoped) assignment, as in real RBAC.
 func CompileRBAC(assignments []RoleAssignment) (map[string][]string, error) {
 	out := map[string][]string{}
 	for _, a := range assignments {
@@ -166,7 +172,49 @@ func CompileRBAC(assignments []RoleAssignment) (map[string][]string, error) {
 			}
 			return nil, fmt.Errorf("unknown role %q (known roles: %s)", a.Role, strings.Join(known, ", "))
 		}
+		if a.Scope != "" {
+			scoped, err := scopeOps(ops, a.Scope)
+			if err != nil {
+				return nil, err
+			}
+			ops = scoped
+		}
 		out[a.PrincipalID] = append(out[a.PrincipalID], ops...)
+	}
+	return out, nil
+}
+
+// scopeOps binds a role's operations to one object. "*" (administrator)
+// expands to every operation of the scope's type first.
+func scopeOps(ops []string, scope string) ([]string, error) {
+	parts := strings.Split(strings.Trim(scope, "/"), "/")
+	if len(parts) != 2 || parts[1] == "" {
+		return nil, fmt.Errorf("scope %q is not /keys|secrets|certificates/{name}", scope)
+	}
+	objType, name := parts[0], parts[1]
+	var table map[string][]string
+	switch objType {
+	case "keys":
+		table = keyPerms
+	case "secrets":
+		table = secretPerms
+	case "certificates":
+		table = certPerms
+	default:
+		return nil, fmt.Errorf("scope %q is not /keys|secrets|certificates/{name}", scope)
+	}
+	expanded := ops
+	if len(ops) == 1 && ops[0] == "*" {
+		expanded = allOf(table)
+	}
+	var out []string
+	for _, op := range expanded {
+		if strings.HasPrefix(op, objType+"/") {
+			out = append(out, op+":"+name)
+		}
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("role grants no %s operations; a %s-scoped assignment would be empty", objType, objType)
 	}
 	return out, nil
 }

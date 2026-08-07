@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -219,20 +220,24 @@ func TestP6ErrorPaths(t *testing.T) {
 		t.Fatal("overflowing duration parsed")
 	}
 
-	dir := t.TempDir()
-	s, st := newService(t, dir)
-	seed(t, st, "s1", "v")
-	if err := os.Chmod(dir, 0o500); err != nil {
-		t.Fatal(err)
+	// chmod cannot write-protect a directory on Windows, so the seal-key
+	// failure path is only reachable on POSIX runners.
+	if runtime.GOOS != "windows" {
+		dir := t.TempDir()
+		s, st := newService(t, dir)
+		seed(t, st, "s1", "v")
+		if err := os.Chmod(dir, 0o500); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+		if w := do(s.backupSecret, "POST", "/x", "", map[string]string{"name": "s1"}); w.Code != http.StatusInternalServerError {
+			t.Fatalf("backup with unwritable data dir = %d %s", w.Code, w.Body.Bytes())
+		}
+		if w := do(s.restoreSecret, "POST", "/x", `{"value":"aGVsbG8"}`, nil); w.Code != http.StatusInternalServerError {
+			t.Fatalf("restore with unwritable data dir = %d %s", w.Code, w.Body.Bytes())
+		}
+		_ = os.Chmod(dir, 0o700)
 	}
-	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
-	if w := do(s.backupSecret, "POST", "/x", "", map[string]string{"name": "s1"}); w.Code != http.StatusInternalServerError {
-		t.Fatalf("backup with unwritable data dir = %d %s", w.Code, w.Body.Bytes())
-	}
-	if w := do(s.restoreSecret, "POST", "/x", `{"value":"aGVsbG8"}`, nil); w.Code != http.StatusInternalServerError {
-		t.Fatalf("restore with unwritable data dir = %d %s", w.Code, w.Body.Bytes())
-	}
-	_ = os.Chmod(dir, 0o700)
 
 	// Cascade failure: the key table gone under a live cert delete.
 	s2dir := t.TempDir()
@@ -375,7 +380,52 @@ func TestCompileRBAC(t *testing.T) {
 	// The compiled map drives the live allowed() gate.
 	s, _ := newService(t, "")
 	s.SetPermissions(perms)
-	if !s.allowed("p1", "secrets/get") || s.allowed("p1", "secrets/set") || !s.allowed("p2", "keys/rotate") {
+	if !s.allowed("p1", "secrets/get", "") || s.allowed("p1", "secrets/set", "") || !s.allowed("p2", "keys/rotate", "") {
 		t.Fatal("compiled RBAC map not enforced by allowed()")
+	}
+}
+
+func TestObjectScopedRBAC(t *testing.T) {
+	perms, err := CompileRBAC([]RoleAssignment{
+		{PrincipalID: "p1", Role: "Key Vault Crypto User", Scope: "/keys/signing-key"},
+		{PrincipalID: "p2", Role: "Key Vault Administrator", Scope: "/secrets/one"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, _ := newService(t, "")
+	s.SetPermissions(perms)
+
+	// p1 may sign with the named key only; list (no object) needs vault scope.
+	if !s.allowed("p1", "keys/sign", "signing-key") {
+		t.Fatal("scoped grant refused on its own object")
+	}
+	if s.allowed("p1", "keys/sign", "other-key") {
+		t.Fatal("scoped grant leaked to another object")
+	}
+	if s.allowed("p1", "keys/list", "") {
+		t.Fatal("object-scoped assignment granted a vault-level operation")
+	}
+	// Administrator scoped to one secret touches that secret only.
+	if !s.allowed("p2", "secrets/get", "one") || s.allowed("p2", "secrets/get", "two") ||
+		s.allowed("p2", "keys/sign", "signing-key") {
+		t.Fatal("scoped administrator not confined to its object")
+	}
+
+	// Malformed and empty-result scopes are refused.
+	if _, err := CompileRBAC([]RoleAssignment{{PrincipalID: "p", Role: "Key Vault Reader", Scope: "/nope/x"}}); err == nil {
+		t.Fatal("bad scope type accepted")
+	}
+	if _, err := CompileRBAC([]RoleAssignment{{PrincipalID: "p", Role: "Key Vault Reader", Scope: "/keys/"}}); err == nil {
+		t.Fatal("empty scope name accepted")
+	}
+	if _, err := CompileRBAC([]RoleAssignment{{PrincipalID: "p", Role: "Key Vault Secrets User", Scope: "/keys/k"}}); err == nil {
+		t.Fatal("type-mismatched scope produced an empty grant silently")
+	}
+
+	// The raw allowlist accepts op:object entries directly.
+	s.SetPermissions(map[string][]string{"p3": {"secrets/get:pin"}})
+	if !s.allowed("p3", "secrets/get", "pin") || s.allowed("p3", "secrets/get", "other") {
+		t.Fatal("scoped allowlist entry not honoured")
 	}
 }

@@ -10,6 +10,16 @@ import (
 	"testing"
 )
 
+// registerIssuer registers a named issuer so external-issuer creation is
+// permitted, as real Key Vault requires.
+func registerIssuer(t *testing.T, s *Service, name string) {
+	t.Helper()
+	w := do(s.setCertIssuer, "PUT", "/x", `{"provider":"Test"}`, map[string]string{"name": name})
+	if w.Code != http.StatusOK && w.Code != http.StatusCreated {
+		t.Fatalf("register issuer %s = %d %s", name, w.Code, w.Body.Bytes())
+	}
+}
+
 func createTestCert(t *testing.T, s *Service, name, body string) *httptest.ResponseRecorder {
 	t.Helper()
 	return do(s.createCertificate, "POST", "/x", body, map[string]string{"name": name})
@@ -22,6 +32,7 @@ func TestCreateCertificateBranches(t *testing.T) {
 		t.Fatalf("malformed = %d", w.Code)
 	}
 	// A non-Self issuer starts an async (pending) operation, not a rejection.
+	registerIssuer(t, s, "DigiCert")
 	if w := createTestCert(t, s, "ext", `{"policy":{"issuer":{"name":"DigiCert"}}}`); w.Code != http.StatusAccepted {
 		t.Fatalf("non-Self issuer = %d %s", w.Code, w.Body.Bytes())
 	} else if !strings.Contains(w.Body.String(), `"inProgress"`) || !strings.Contains(w.Body.String(), `"csr"`) {

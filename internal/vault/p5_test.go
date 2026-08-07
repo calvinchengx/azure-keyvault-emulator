@@ -99,6 +99,7 @@ func TestKeyOpsEnforced(t *testing.T) {
 func TestCertOperationCancelAndDelete(t *testing.T) {
 	s, _ := newService(t, "")
 	nv := map[string]string{"name": "ext"}
+	registerIssuer(t, s, "DigiCert")
 	createTestCert(t, s, "ext", `{"policy":{"issuer":{"name":"DigiCert"},"x509_props":{"subject":"CN=ext.test"}}}`)
 
 	// Cancel the in-progress operation; it reads back cancelled.
@@ -202,6 +203,7 @@ func TestP5StorageFailures(t *testing.T) {
 	dir := t.TempDir()
 	s, _ := newService(t, dir)
 	nv := map[string]string{"name": "ext"}
+	registerIssuer(t, s, "DigiCert")
 	createTestCert(t, s, "ext", `{"policy":{"issuer":{"name":"DigiCert"},"x509_props":{"subject":"CN=ext.test"}}}`)
 	kv := map[string]string{"name": "rot"}
 	do(s.createKey, "POST", "/x", `{"kty":"RSA"}`, kv)
@@ -269,6 +271,7 @@ func TestCreateClearsMarkerFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer db.Close()
+	registerIssuer(t, s, "DigiCert")
 	if _, err := db.Exec(`DROP TABLE cert_ops_deleted`); err != nil {
 		t.Fatal(err)
 	}
@@ -297,6 +300,7 @@ func TestP5ClosedDBErrors(t *testing.T) {
 	st.Close()
 	for name, w := range map[string]*httptest.ResponseRecorder{
 		"rotate":    do(s.rotateKey, "POST", "/x", "", nv),
+		"release":   do(s.releaseKey, "POST", "/x", `{}`, nv),
 		"cancel op": do(s.cancelCertificateOperation, "PATCH", "/x", `{"cancellation_requested":true}`, nv),
 		"delete op": do(s.deleteCertificateOperation, "DELETE", "/x", "", nv),
 		"get op":    do(s.getCertificateOperation, "GET", "/x", "", nv),

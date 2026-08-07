@@ -65,8 +65,17 @@ func TestReleaseKey(t *testing.T) {
 	if w := do(s.releaseKey, "POST", "/x", `{}`, map[string]string{"name": "nope", "version": ""}); w.Code != http.StatusNotFound {
 		t.Fatalf("release missing = %d", w.Code)
 	}
-	createTestKey(t, s, "rk", `{"kty":"RSA"}`)
+	// Only an exportable key may be released; a plain key is refused.
+	createTestKey(t, s, "plain", `{"kty":"RSA"}`)
+	pv, _ := s.Store.GetKey("emulator", "plain")
+	if w := do(s.releaseKey, "POST", "/x", `{}`, map[string]string{"name": "plain", "version": pv.Version}); w.Code != http.StatusForbidden {
+		t.Fatalf("release non-exportable = %d %s", w.Code, w.Body.Bytes())
+	}
+	createTestKey(t, s, "rk", `{"kty":"RSA","attributes":{"exportable":true},"release_policy":{"contentType":"application/json","data":"e30"}}`)
 	v, _ := s.Store.GetKey("emulator", "rk")
+	if !v.Exportable || v.ReleasePolicyJSON == "" {
+		t.Fatalf("exportable/release_policy not stored: %+v", v)
+	}
 	w := do(s.releaseKey, "POST", "/x", `{"target":"aas-attestation","nonce":"n1"}`,
 		map[string]string{"name": "rk", "version": v.Version})
 	if w.Code != http.StatusOK {
@@ -93,6 +102,7 @@ func TestCertMergeFlow(t *testing.T) {
 	nv := map[string]string{"name": "ext"}
 
 	// A named issuer starts a pending operation exposing a CSR.
+	registerIssuer(t, s, "DigiCert")
 	cw := createTestCert(t, s, "ext",
 		`{"policy":{"issuer":{"name":"DigiCert"},"x509_props":{"subject":"CN=ext.test"}}}`)
 	if cw.Code != http.StatusAccepted {
@@ -154,6 +164,7 @@ func TestPendingCertBranches(t *testing.T) {
 
 	// An EC key policy exercises the EC CSR path, then a full merge exercises
 	// the EC materialize path.
+	registerIssuer(t, s, "CA")
 	if w := createTestCert(t, s, "ec-ext",
 		`{"policy":{"issuer":{"name":"CA"},"key_props":{"kty":"EC","crv":"P-384"}}}`); w.Code != http.StatusAccepted {
 		t.Fatalf("ec pending = %d %s", w.Code, w.Body.Bytes())
@@ -192,6 +203,7 @@ func TestPendingMergeStorageFailures(t *testing.T) {
 	s, st := newService(t, dir)
 
 	// A pending op whose CSR we sign up-front, before breaking the DB.
+	registerIssuer(t, s, "CA")
 	createTestCert(t, s, "mp", `{"policy":{"issuer":{"name":"CA"}}}`)
 	p, err := st.GetPendingCert("emulator", "mp")
 	if err != nil {

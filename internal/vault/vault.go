@@ -143,15 +143,23 @@ func (s *Service) SetPermissions(perms map[string][]string) {
 	s.perms = perms
 }
 
-// allowed reports whether the principal may perform op.
-func (s *Service) allowed(principalID, op string) bool {
+// allowed reports whether the principal may perform op on the named object.
+// Entries match at three granularities, mirroring data-plane RBAC scoping:
+// "*" (everything), "{type}/{op}" (the op on any object — the vault scope),
+// and "{type}/{op}:{object}" (the op on that object only). Operations with
+// no object of their own (list, restore, rng) match only unscoped entries,
+// as vault-level scope is what grants them in real RBAC.
+func (s *Service) allowed(principalID, op, object string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if len(s.perms) == 0 {
 		return true
 	}
 	for _, got := range s.perms[principalID] {
-		if got == op || got == "*" {
+		if got == "*" || got == op {
+			return true
+		}
+		if object != "" && got == op+":"+object {
 			return true
 		}
 	}
@@ -260,7 +268,7 @@ func (s *Service) withAuth(op string, h handler) http.HandlerFunc {
 			writeKVErr(w, http.StatusUnauthorized, "Unauthorized", err.Error())
 			return
 		}
-		if !s.allowed(p.ID, op) {
+		if !s.allowed(p.ID, op, r.PathValue("name")) {
 			writeKVErr(w, http.StatusForbidden, "Forbidden",
 				fmt.Sprintf("The principal is not permitted to perform %s on this vault.", op))
 			return
