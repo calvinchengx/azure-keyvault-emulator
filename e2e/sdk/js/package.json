@@ -1,0 +1,16 @@
+{
+  "name": "azure-keyvault-emulator-e2e-js",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Real @azure/keyvault-* SDK witness suite against the emulator pair",
+  "scripts": {
+    "preinstall": "npx only-allow pnpm"
+  },
+  "dependencies": {
+    "@azure/identity": "^4.13.0",
+    "@azure/keyvault-certificates": "^4.10.0",
+    "@azure/keyvault-keys": "^4.10.0",
+    "@azure/keyvault-secrets": "^4.10.0"
+  }
+}

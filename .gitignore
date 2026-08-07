@@ -30,3 +30,7 @@ portal/playwright-report/
 
 # Python bytecode from scripts/
 __pycache__/
+
+# .NET build output from the e2e SDK witness suite
+e2e/sdk/dotnet/bin/
+e2e/sdk/dotnet/obj/
