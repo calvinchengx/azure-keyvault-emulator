@@ -93,4 +93,35 @@ func TestControlSurface(t *testing.T) {
 	if w := s.hit(t, "POST", "/_emulator/purge-protection", `{nope`); w.Code != http.StatusBadRequest {
 		t.Fatalf("purge-protection bad body = %d; want 400", w.Code)
 	}
+	// Access policies: the real document compiles; unknown names and bad
+	// bodies are refused; an empty list restores full access.
+	ap := `{"accessPolicies":[{"objectId":"p1","permissions":{"secrets":["get","list"]}}]}`
+	if w := s.hit(t, "POST", "/_emulator/access-policy", ap); w.Code != http.StatusOK {
+		t.Fatalf("access-policy = %d %s", w.Code, w.Body.String())
+	}
+	if w := s.hit(t, "POST", "/_emulator/access-policy",
+		`{"accessPolicies":[{"objectId":"p1","permissions":{"secrets":["frobnicate"]}}]}`); w.Code != http.StatusBadRequest {
+		t.Fatalf("bad permission accepted = %d", w.Code)
+	}
+	if w := s.hit(t, "POST", "/_emulator/access-policy", `{nope`); w.Code != http.StatusBadRequest {
+		t.Fatalf("access-policy bad body = %d", w.Code)
+	}
+	if w := s.hit(t, "POST", "/_emulator/access-policy", `{"accessPolicies":[]}`); w.Code != http.StatusOK {
+		t.Fatalf("access-policy reset = %d", w.Code)
+	}
+	// RBAC: built-in roles assign; unknown roles and bad bodies are refused.
+	rb := `{"assignments":[{"principalId":"p1","role":"Key Vault Secrets User"}]}`
+	if w := s.hit(t, "POST", "/_emulator/rbac", rb); w.Code != http.StatusOK {
+		t.Fatalf("rbac = %d %s", w.Code, w.Body.String())
+	}
+	if w := s.hit(t, "POST", "/_emulator/rbac",
+		`{"assignments":[{"principalId":"p1","role":"Duke of Vaults"}]}`); w.Code != http.StatusBadRequest {
+		t.Fatalf("unknown role accepted = %d", w.Code)
+	}
+	if w := s.hit(t, "POST", "/_emulator/rbac", `{nope`); w.Code != http.StatusBadRequest {
+		t.Fatalf("rbac bad body = %d", w.Code)
+	}
+	if w := s.hit(t, "POST", "/_emulator/rbac", `{"assignments":[]}`); w.Code != http.StatusOK {
+		t.Fatalf("rbac reset = %d", w.Code)
+	}
 }
