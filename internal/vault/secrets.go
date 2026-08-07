@@ -26,7 +26,7 @@ func (s *Service) attrsOf(v *store.SecretVersion) attributes {
 	return attributes{
 		Enabled: &v.Enabled, NBF: v.NBF, Exp: v.Exp,
 		Created: v.CreatedAt, Updated: v.UpdatedAt,
-		RecoveryLevel: "Recoverable+Purgeable", RecoverableDays: s.Cfg.SoftDeleteRetentionDays,
+		RecoveryLevel: s.recoveryLevel(), RecoverableDays: s.Cfg.SoftDeleteRetentionDays,
 	}
 }
 
@@ -322,6 +322,9 @@ func (s *Service) listDeletedSecrets(w http.ResponseWriter, r *http.Request, vau
 }
 
 func (s *Service) purgeSecret(w http.ResponseWriter, r *http.Request, vault string) {
+	if s.refusePurge(w) {
+		return
+	}
 	name := r.PathValue("name")
 	if _, err := s.Store.GetDeletedSecret(vault, name); errors.Is(err, store.ErrNotFound) {
 		secretNotFound(w, name)

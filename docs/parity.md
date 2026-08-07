@@ -64,11 +64,10 @@ therefore means "absent", not "honestly refused".
 | Public JWK exposure (private material never leaves) | Full — private PKCS#8 stays in the store | 🟢 Real |
 | `RSA-HSM` / `EC-HSM` key types | Accepted, then **silently normalised to software keys** — no HSM exists | 🟡 Emulated |
 | Secure Key Release (`/release`) | Real signed JWS with a fresh signer and public JWK header, but **no attestation** — the claim is self-declared | 🟡 Emulated |
-| Key rotation **policy** (get/set) | Stored and round-tripped verbatim | 🟡 Emulated |
-| **Rotate key** (`POST /keys/{name}/rotate`) | — no route | 🔴 Not implemented |
-| `key_ops` enforcement | Stored and echoed into the JWK, but **not enforced** — a `sign`-only key will still encrypt | 🔴 Not implemented |
-| **`oct` / `oct-HSM` symmetric keys** | — only RSA/EC are generated | 🔴 Not implemented |
-| **AES algorithms** (A128/192/256 CBC/CBCPAD/GCM, AESKW) | — the crypto paths require an RSA key | 🔴 Not implemented |
+| Key rotation **policy** (get/set) | Stored and round-tripped verbatim; does not drive rotation attributes | 🟡 Emulated |
+| Rotate key (`POST /keys/{name}/rotate`) | Real: a new version with fresh material of the same type and size; `key_ops` and tags carry over | 🟢 Real |
+| `key_ops` enforcement | Enforced — an operation outside the key's `key_ops` gets `403 Forbidden`, and the JWK's `key_ops` drives SDK-local refusal too | 🟢 Real |
+| `oct` / `oct-HSM` symmetric keys (and their AES algorithms) | Refused with the real error — vaults hold RSA/EC only; symmetric keys require **Managed HSM**, which is out of scope below | 🟢 Real |
 | **BYOK** (KEK-wrapped import) | — import takes raw private members only | 🔴 Not implemented |
 | Key backup / restore | Round-trips a JSON blob carrying the private DER, not an opaque encrypted blob | 🟡 Emulated |
 
@@ -86,7 +85,8 @@ therefore means "absent", not "honestly refused".
 | Delete cascade to the linked key/secret | **Diverges from real Key Vault**: creation cascades, deletion does not, so delete → purge → restore can leave the linked objects behind | 🟡 Emulated |
 | Issuers / contacts | Opaque document round-trip; they do **not** drive issuance | 🟡 Emulated |
 | Certificate backup / restore | Round-trips a JSON blob, not an opaque encrypted blob | 🟡 Emulated |
-| Cancel / delete a pending certificate operation | — no route | 🔴 Not implemented |
+| Cancel / delete a certificate operation | Cancel marks an in-progress operation `cancelled` (merge is then refused); delete removes the operation until the next create restores it | 🟢 Real |
+| Create operation LRO shape (`inProgress` on create → `completed` on poll) | As real Key Vault reports it — the shape the SDK pollers depend on | 🟢 Real |
 
 ## Soft-delete & recovery
 
@@ -95,7 +95,7 @@ therefore means "absent", not "honestly refused".
 | Soft-delete → list-deleted → recover → purge (secrets, keys, certificates) | Real state machine; retention validated 7–90 days | 🟡 Emulated |
 | Retention window expiry | Genuinely clock-driven — an object past `purgeAt` is purged lazily on read/list, against the controllable clock | 🟡 Emulated |
 | Name reuse while soft-deleted → `409 Conflict` | Enforced | 🟢 Real |
-| **Purge protection** / non-purgeable `recoveryLevel` | `recoveryLevel` is always `Recoverable+Purgeable`; purge is always allowed | 🔴 Not implemented |
+| Purge protection / non-purgeable `recoveryLevel` | `-purge-protection` (or `/_emulator/purge-protection`): purge returns `403 Forbidden` and `recoveryLevel` reports `Recoverable` while enabled | 🟢 Real |
 
 ## Vault addressing, TLS & the object model
 
@@ -106,7 +106,7 @@ therefore means "absent", not "honestly refused".
 | TLS with a cert covering `*.vault.azure.net` | Real self-signed material, persisted so fingerprints are stable | 🟢 Real |
 | Paging (`maxresults`, `nextLink`) | Full, capped at 25 | 🟢 Real |
 | Key Vault error envelope + `x-ms-request-id` | On every response | 🟢 Real |
-| `api-version` validation / version-differentiated behaviour | **Never read** — any value (or none) is accepted and merely echoed into `nextLink` | 🔴 Not implemented |
+| `api-version` validation | Required and validated: the 7.x line and the date-based versions current SDKs send (e.g. `2025-07-01`) are accepted; anything else gets the real `400` envelope. Behaviour is not version-differentiated | 🟢 Real |
 
 ## Authorization
 
@@ -134,7 +134,7 @@ therefore means "absent", not "honestly refused".
 | `azcertificates` (Azure Go SDK) | Certificate create/import/merge | 🟢 CI `test` |
 | `azidentity` (`ClientSecretCredential`) | The Entra challenge handshake, against an in-process real **entra-emulator** | 🟢 CI `test` |
 | Three-emulator chain (vault secret → managed identity → Entra → Fabric) | The family integration, incl. a negative test | 🟢 CI `chain` (stdlib HTTP, not an SDK) |
-| `azure-keyvault-secrets`/`-keys`/`-certificates` + `azure-identity` (**Python**) | Challenge auth; secret lifecycle incl. soft-delete → recover → purge; RSA crypto via `CryptographyClient` with a tamper negative; self-signed certificate LRO | 🟢 CI `python-sdk` (3 OSes) |
+| `azure-keyvault-secrets`/`-keys`/`-certificates` + `azure-identity` (**Python**) | Challenge auth; secret lifecycle incl. soft-delete → recover → purge; RSA crypto via `CryptographyClient` with a tamper negative; on-demand rotation; a `key_ops` refusal; self-signed certificate LRO | 🟢 CI `python-sdk` (3 OSes) |
 | `@azure/keyvault-secrets`/`-keys`/`-certificates` + `@azure/identity` (**JavaScript**) | Same surface as the Python suite | 🟢 CI `js-sdk` (3 OSes) |
 | `Azure.Security.KeyVault.{Secrets,Keys,Certificates}` + `Azure.Identity` (**.NET**) | Same surface as the Python suite | 🟢 CI `dotnet-sdk` (3 OSes) |
 

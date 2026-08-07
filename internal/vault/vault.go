@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
 	"sync"
 
@@ -38,11 +39,17 @@ type Service struct {
 	// absent from a non-empty map (or with an empty list) is denied; an
 	// empty map means full access for everyone (the default dev posture).
 	perms map[string][]string
+	// purgeProtection mirrors real Key Vault's vault property: while
+	// enabled, purge is refused (403) and recoveryLevel reports
+	// "Recoverable". Initialized from config, toggleable at runtime via
+	// /_emulator/purge-protection.
+	purgeProtection bool
 }
 
 // New wires the service.
 func New(cfg *config.Config, st *store.Store, v *auth.Validator) *Service {
-	s := &Service{Store: st, Auth: v, Cfg: cfg, mux: http.NewServeMux(), certMux: http.NewServeMux()}
+	s := &Service{Store: st, Auth: v, Cfg: cfg, mux: http.NewServeMux(), certMux: http.NewServeMux(),
+		purgeProtection: cfg.PurgeProtection}
 	s.mux.HandleFunc("PUT /secrets/{name}", s.withAuth("secrets/set", s.setSecret))
 	s.mux.HandleFunc("GET /secrets/{name}", s.withAuth("secrets/get", s.getSecret))
 	// The Azure SDK requests the unversioned get as /secrets/{name}/ — an
@@ -75,6 +82,7 @@ func New(cfg *config.Config, st *store.Store, v *auth.Validator) *Service {
 	s.mux.HandleFunc("POST /keys/restore", s.withAuth("keys/restore", s.restoreKey))
 	s.mux.HandleFunc("GET /keys/{name}/rotationpolicy", s.withAuth("keys/get", s.getKeyRotationPolicy))
 	s.mux.HandleFunc("PUT /keys/{name}/rotationpolicy", s.withAuth("keys/update", s.setKeyRotationPolicy))
+	s.mux.HandleFunc("POST /keys/{name}/rotate", s.withAuth("keys/rotate", s.rotateKey))
 	s.mux.HandleFunc("GET /deletedkeys/{name}", s.withAuth("keys/get", s.getDeletedKey))
 	s.mux.HandleFunc("GET /deletedkeys", s.withAuth("keys/list", s.listDeletedKeys))
 	s.mux.HandleFunc("DELETE /deletedkeys/{name}", s.withAuth("keys/purge", s.purgeKey))
@@ -97,6 +105,8 @@ func New(cfg *config.Config, st *store.Store, v *auth.Validator) *Service {
 	s.mux.HandleFunc("POST /certificates/{name}/backup", s.withAuth("certificates/backup", s.backupCertificate))
 	s.mux.HandleFunc("POST /certificates/restore", s.withAuth("certificates/restore", s.restoreCertificate))
 	s.mux.HandleFunc("GET /certificates/{name}/pending", s.withAuth("certificates/get", s.getCertificateOperation))
+	s.mux.HandleFunc("PATCH /certificates/{name}/pending", s.withAuth("certificates/update", s.cancelCertificateOperation))
+	s.mux.HandleFunc("DELETE /certificates/{name}/pending", s.withAuth("certificates/update", s.deleteCertificateOperation))
 	s.mux.HandleFunc("GET /certificates/{name}/policy", s.withAuth("certificates/get", s.getCertificatePolicy))
 	s.mux.HandleFunc("PATCH /certificates/{name}/policy", s.withAuth("certificates/update", s.updateCertificatePolicy))
 	s.mux.HandleFunc("GET /certificates/{name}/versions", s.withAuth("certificates/list", s.listCertificateVersions))
@@ -146,6 +156,39 @@ func (s *Service) allowed(principalID, op string) bool {
 		}
 	}
 	return false
+}
+
+// SetPurgeProtection toggles the vault's purge protection (real Key Vault
+// can only ever turn it on; the emulator allows both directions for tests).
+func (s *Service) SetPurgeProtection(on bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.purgeProtection = on
+}
+
+func (s *Service) purgeProtected() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.purgeProtection
+}
+
+// recoveryLevel is the attributes.recoveryLevel real Key Vault reports for
+// this vault's soft-delete posture.
+func (s *Service) recoveryLevel() string {
+	if s.purgeProtected() {
+		return "Recoverable"
+	}
+	return "Recoverable+Purgeable"
+}
+
+// refusePurge writes the real Key Vault refusal when purge protection is on.
+func (s *Service) refusePurge(w http.ResponseWriter) bool {
+	if !s.purgeProtected() {
+		return false
+	}
+	writeKVErr(w, http.StatusForbidden, "Forbidden",
+		`Operation "purge" is not allowed because purge protection is enabled for this vault.`)
+	return true
 }
 
 // SetFaults configures fault switches; negative values leave a field as-is.
@@ -222,8 +265,34 @@ func (s *Service) withAuth(op string, h handler) http.HandlerFunc {
 				fmt.Sprintf("The principal is not permitted to perform %s on this vault.", op))
 			return
 		}
+		if !s.validAPIVersion(w, r) {
+			return
+		}
 		h(w, r, s.vaultName(r))
 	}
+}
+
+// apiVersionRE accepts the data-plane versions real Key Vault serves: the
+// classic 7.x line and the newer date-based versions current SDK generations
+// send (e.g. 2025-07-01), each with -preview forms.
+var apiVersionRE = regexp.MustCompile(`^(7\.\d+|\d{4}-\d{2}-\d{2})(-preview(\.\d+)?)?$`)
+
+// validAPIVersion enforces the api-version query parameter as real Key Vault
+// does: it is required, and unknown versions are refused with the Key Vault
+// error envelope. Auth runs first (as in real Key Vault: the 401 challenge is
+// issued regardless of api-version).
+func (s *Service) validAPIVersion(w http.ResponseWriter, r *http.Request) bool {
+	v := r.URL.Query().Get("api-version")
+	if v == "" {
+		writeKVErr(w, http.StatusBadRequest, "BadParameter", "api-version must be specified")
+		return false
+	}
+	if !apiVersionRE.MatchString(v) {
+		writeKVErr(w, http.StatusBadRequest, "BadParameter",
+			fmt.Sprintf("The specified api-version %q is not supported. Supported versions are 7.x and date-based (e.g. 7.5, 2025-07-01).", v))
+		return false
+	}
+	return true
 }
 
 // ServeHTTP dispatches to the data-plane mux. The Azure SDK emits an empty

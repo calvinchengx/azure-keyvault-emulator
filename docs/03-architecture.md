@@ -154,6 +154,8 @@ approached from two directions:
 > Where the docs are ambiguous, whatever the real SDKs require wins — see
 > [parity.md](parity.md) for the claim-by-claim witness map.
 
-The data plane is versioned by the `api-version` query parameter (GA `7.5`; the
-emulator accepts any `7.x`). Re-audit by diffing the grounding files against
+The data plane is versioned by the `api-version` query parameter, which is
+required and validated: the classic `7.x` line and the date-based versions
+current SDK generations send (e.g. `2025-07-01`) are accepted; anything else
+gets the real `400` envelope. Re-audit by diffing the grounding files against
 that SHA and bumping the pin.

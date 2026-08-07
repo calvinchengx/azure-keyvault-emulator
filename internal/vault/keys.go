@@ -1,11 +1,13 @@
 package vault
 
 import (
+	"crypto/rsa"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 
 	"github.com/calvinchengx/azure-keyvault-emulator/internal/store"
 )
@@ -31,7 +33,7 @@ func (s *Service) keyAttrs(v *store.KeyVersion) attributes {
 	return attributes{
 		Enabled: &v.Enabled, NBF: v.NBF, Exp: v.Exp,
 		Created: v.CreatedAt, Updated: v.UpdatedAt,
-		RecoveryLevel: "Recoverable+Purgeable", RecoverableDays: s.Cfg.SoftDeleteRetentionDays,
+		RecoveryLevel: s.recoveryLevel(), RecoverableDays: s.Cfg.SoftDeleteRetentionDays,
 	}
 }
 
@@ -322,6 +324,9 @@ func (s *Service) listDeletedKeys(w http.ResponseWriter, r *http.Request, vault 
 }
 
 func (s *Service) purgeKey(w http.ResponseWriter, r *http.Request, vault string) {
+	if s.refusePurge(w) {
+		return
+	}
 	name := r.PathValue("name")
 	if _, err := s.Store.GetDeletedKey(vault, name); errors.Is(err, store.ErrNotFound) {
 		keyNotFound(w, name)
@@ -360,7 +365,51 @@ func (s *Service) recoverKey(w http.ResponseWriter, r *http.Request, vault strin
 	}
 }
 
+// rotateKey is POST /keys/{name}/rotate: mint a new version with fresh
+// material of the same type and size, as real Key Vault's on-demand rotation
+// does. key_ops and tags carry over to the new version. The stored rotation
+// policy does not drive attributes (see parity.md).
+func (s *Service) rotateKey(w http.ResponseWriter, r *http.Request, vault string) {
+	name := r.PathValue("name")
+	v := s.loadKey(w, vault, name, "")
+	if v == nil {
+		return
+	}
+	priv, err := parseKey(v.PrivateDER)
+	if err != nil {
+		writeKVErr(w, http.StatusInternalServerError, "InternalServerError", err.Error())
+		return
+	}
+	size := 0
+	if rk, ok := priv.(*rsa.PrivateKey); ok {
+		size = rk.N.BitLen()
+	}
+	der, crv, err := generateKey(v.Kty, size, v.Crv)
+	if err != nil {
+		writeKVErr(w, http.StatusInternalServerError, "InternalServerError", err.Error())
+		return
+	}
+	nv := &store.KeyVersion{
+		Vault: vault, Name: name, Kty: v.Kty, Crv: crv, PrivateDER: der,
+		Enabled: true, KeyOpsJSON: v.KeyOpsJSON, TagsJSON: v.TagsJSON,
+	}
+	if err := s.Store.SetKey(nv); err != nil {
+		writeKVErr(w, http.StatusInternalServerError, "InternalServerError", err.Error())
+		return
+	}
+	if b, ok := s.keyBundle(w, r, nv); ok {
+		writeJSON(w, http.StatusOK, b)
+	}
+}
+
 // ---- crypto operations ----
+
+// jwkOp maps the lowercase route segment to the JWK key_ops name it must be
+// authorized by.
+var jwkOp = map[string]string{
+	"sign": "sign", "verify": "verify", "encrypt": "encrypt",
+	"decrypt": "decrypt", "wrapkey": "wrapKey", "unwrapkey": "unwrapKey",
+}
 
 // cryptoOp handles sign/verify/encrypt/decrypt/wrapkey/unwrapkey — the op
 // comes from the route. Wire values are base64url.
@@ -368,6 +417,13 @@ func (s *Service) cryptoOp(op string) handler {
 	return func(w http.ResponseWriter, r *http.Request, vault string) {
 		v := s.loadKey(w, vault, r.PathValue("name"), r.PathValue("version"))
 		if v == nil {
+			return
+		}
+		// key_ops is enforced, as in real Key Vault: a key created with a
+		// restricted operation list refuses everything outside it.
+		if !slices.Contains(keyOps(v), jwkOp[op]) {
+			writeKVErr(w, http.StatusForbidden, "Forbidden",
+				fmt.Sprintf("Operation %s is not permitted on this key.", jwkOp[op]))
 			return
 		}
 		var body struct {

@@ -110,6 +110,32 @@ var tampered = SHA256.HashData(System.Text.Encoding.UTF8.GetBytes("tampered"));
 Check("tampered digest rejected",
     !(await cc.VerifyAsync(SignatureAlgorithm.RS256, tampered, sig.Signature)).IsValid);
 
+var rotated = (await kc.RotateKeyAsync("dn-e2e-rsa")).Value;
+Check("rotate mints a new version",
+    rotated.Properties.Version != key.Properties.Version && rotated.KeyType == KeyType.Rsa);
+
+var restrictedOpts = new CreateRsaKeyOptions("dn-e2e-signonly") { KeySize = 2048 };
+restrictedOpts.KeyOperations.Add(KeyOperation.Sign);
+restrictedOpts.KeyOperations.Add(KeyOperation.Verify);
+var restricted = (await kc.CreateRsaKeyAsync(restrictedOpts)).Value;
+var rcc = new CryptographyClient(
+    new Uri(kvUrl, $"keys/{restricted.Name}/{restricted.Properties.Version}"),
+    cred,
+    new CryptographyClientOptions
+    {
+        Transport = transport,
+        DisableChallengeResourceVerification = true,
+    });
+try
+{
+    await rcc.EncryptAsync(EncryptionAlgorithm.RsaOaep, System.Text.Encoding.UTF8.GetBytes("nope"));
+    Check("key_ops enforced", false);
+}
+catch (RequestFailedException e)
+{
+    Check("key_ops enforced", e.Status == 403, $"got {e.Status}");
+}
+
 // --- Certificates: self-signed issuance via the LRO poller ---
 Console.WriteLine("CertificateClient");
 var certClient = new CertificateClient(kvUrl, cred, new CertificateClientOptions

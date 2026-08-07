@@ -14,7 +14,9 @@ end. Same versioning + soft-delete skeleton as
 | `POST /certificates/{name}/create` | `Self` issuer → self-signed cert; a named issuer → pending operation with a CSR |
 | `POST /certificates/{name}/import` | import a base64 PKCS#12 (PFX) or PEM bundle |
 | `POST /certificates/{name}/pending/merge` | complete a pending operation with the signed chain (`{x5c}`) |
-| `GET /certificates/{name}/pending` | the certificate operation (poll) — `inProgress`+CSR, or `completed` |
+| `GET /certificates/{name}/pending` | the certificate operation (poll) — `inProgress`+CSR, `cancelled`, or `completed` |
+| `PATCH /certificates/{name}/pending` | cancel an in-progress operation (`{"cancellation_requested": true}`); cancelled operations refuse merge |
+| `DELETE /certificates/{name}/pending` | delete the operation — it reads absent until the next create restores it |
 | `GET /certificates/{name}` \| `/certificates/{name}/{version}` | get the certificate bundle |
 | `PATCH /certificates/{name}` \| `/certificates/{name}/{version}` | update attributes/tags (and policy if supplied) |
 | `GET` \| `PATCH /certificates/{name}/policy` | get / update the certificate policy |
@@ -40,9 +42,11 @@ issuance — only the `Self` issuer produces certificates (see below).
 `create` reads the policy's `key_props` (RSA/EC, size/curve), `x509_props`
 (subject, subject-alternative DNS names, validity months), and `issuer`.
 
-- **`Self` (or unset) issuer → synchronous self-signed.** The returned
-  operation reports `status: completed` immediately; the SDK polls `/pending`
-  once and proceeds to `GET`.
+- **`Self` (or unset) issuer → self-signed.** Issuance is synchronous
+  internally, but the create response reports `status: inProgress` — as real
+  Key Vault does — and the `/pending` poll reports `completed`. (The Python
+  SDK's poller depends on that two-step; an already-completed create response
+  makes it resolve to nothing.)
 - **A named issuer → asynchronous (pending) operation.** The emulator
   generates the key and a real PKCS#10 **CSR**, and the operation reports
   `status: inProgress` with the `csr`. You sign that CSR with your own CA and
