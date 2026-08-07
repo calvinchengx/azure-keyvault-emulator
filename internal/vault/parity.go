@@ -4,10 +4,13 @@ package vault
 // expose beyond core CRUD — GetRandomBytes, key import, key/certificate
 // backup+restore, key rotation policy, certificate update/policy-update, and
 // the certificate issuers and contacts sub-resources. These round out
-// feature parity with the reference emulator while keeping our real-auth and
-// real-crypto posture.
+// feature parity with real Key Vault's SDK-observable surface while keeping
+// our real-auth and real-crypto posture.
 
 import (
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -116,11 +119,15 @@ func (s *Service) backupKey(w http.ResponseWriter, r *http.Request, vault string
 		writeKVErr(w, http.StatusInternalServerError, "InternalServerError", err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"value": base64.RawURLEncoding.EncodeToString(raw)})
+	sealed, ok := s.sealBackup(w, raw)
+	if !ok {
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"value": sealed})
 }
 
 func (s *Service) restoreKey(w http.ResponseWriter, r *http.Request, vault string) {
-	raw, ok := decodeBackup(w, r)
+	raw, ok := s.decodeBackup(w, r)
 	if !ok {
 		return
 	}
@@ -155,8 +162,8 @@ func (s *Service) restoreKey(w http.ResponseWriter, r *http.Request, vault strin
 // releaseKey is POST /keys/{name}/{version}/release. It returns a signed JWS
 // carrying the released key's public JWK — the SDK's ReleaseKey path. Real
 // attestation is out of scope (there is no HSM/enclave), so the emulator
-// releases any enabled key, like the reference emulator; the token is
-// nonetheless a genuine signed object.
+// releases any enabled key; the token is nonetheless a genuine signed
+// object.
 func (s *Service) releaseKey(w http.ResponseWriter, r *http.Request, vault string) {
 	v := s.loadKey(w, vault, r.PathValue("name"), r.PathValue("version"))
 	if v == nil {
@@ -271,11 +278,15 @@ func (s *Service) backupCertificate(w http.ResponseWriter, r *http.Request, vaul
 		writeKVErr(w, http.StatusInternalServerError, "InternalServerError", err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"value": base64.RawURLEncoding.EncodeToString(raw)})
+	sealed, ok := s.sealBackup(w, raw)
+	if !ok {
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"value": sealed})
 }
 
 func (s *Service) restoreCertificate(w http.ResponseWriter, r *http.Request, vault string) {
-	raw, ok := decodeBackup(w, r)
+	raw, ok := s.decodeBackup(w, r)
 	if !ok {
 		return
 	}
@@ -521,8 +532,37 @@ func (s *Service) contactsBundle(r *http.Request, js string) map[string]any {
 
 // ---- shared helpers ----
 
-// decodeBackup reads and base64url-decodes a {"value": "..."} backup body.
-func decodeBackup(w http.ResponseWriter, r *http.Request) ([]byte, bool) {
+// sealBackup encrypts a backup payload (AES-GCM under the store's seal key)
+// and returns the wire form — an opaque blob, as real Key Vault emits, that
+// only this emulator instance can restore.
+func (s *Service) sealBackup(w http.ResponseWriter, plain []byte) (string, bool) {
+	key, err := s.Store.SealKey()
+	if err != nil {
+		writeKVErr(w, http.StatusInternalServerError, "InternalServerError", err.Error())
+		return "", false
+	}
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		writeKVErr(w, http.StatusInternalServerError, "InternalServerError", err.Error())
+		return "", false
+	}
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		writeKVErr(w, http.StatusInternalServerError, "InternalServerError", err.Error())
+		return "", false
+	}
+	nonce := make([]byte, gcm.NonceSize())
+	if _, err := rand.Read(nonce); err != nil {
+		writeKVErr(w, http.StatusInternalServerError, "InternalServerError", err.Error())
+		return "", false
+	}
+	return base64.RawURLEncoding.EncodeToString(gcm.Seal(nonce, nonce, plain, nil)), true
+}
+
+// decodeBackup reads a {"value": "..."} backup body and unseals it. A blob
+// this emulator did not produce (wrong key, tampered, or the old transparent
+// format) is refused.
+func (s *Service) decodeBackup(w http.ResponseWriter, r *http.Request) ([]byte, bool) {
 	var body struct {
 		Value string `json:"value"`
 	}
@@ -535,7 +575,32 @@ func decodeBackup(w http.ResponseWriter, r *http.Request) ([]byte, bool) {
 		writeKVErr(w, http.StatusBadRequest, "BadParameter", "The backup blob is not valid base64url.")
 		return nil, false
 	}
-	return raw, true
+	key, err := s.Store.SealKey()
+	if err != nil {
+		writeKVErr(w, http.StatusInternalServerError, "InternalServerError", err.Error())
+		return nil, false
+	}
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		writeKVErr(w, http.StatusInternalServerError, "InternalServerError", err.Error())
+		return nil, false
+	}
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		writeKVErr(w, http.StatusInternalServerError, "InternalServerError", err.Error())
+		return nil, false
+	}
+	if len(raw) < gcm.NonceSize() {
+		writeKVErr(w, http.StatusBadRequest, "BadParameter", "The backup blob is malformed.")
+		return nil, false
+	}
+	plain, err := gcm.Open(nil, raw[:gcm.NonceSize()], raw[gcm.NonceSize():], nil)
+	if err != nil {
+		writeKVErr(w, http.StatusBadRequest, "BadParameter",
+			"The backup blob was not produced by this vault or has been modified.")
+		return nil, false
+	}
+	return plain, true
 }
 
 // readRawJSON reads the body and validates it is well-formed JSON, returning

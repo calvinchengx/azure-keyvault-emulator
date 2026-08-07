@@ -1,7 +1,6 @@
 package vault
 
 import (
-	"crypto/rsa"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -120,10 +119,16 @@ func normalizeKty(kty string) string {
 }
 
 // loadKey resolves name(+optional version) to a live, enabled key version.
+// Unversioned (latest) loads run the lazy rotation engine first, so a due
+// rotation policy has acted before the caller sees "the" key.
 func (s *Service) loadKey(w http.ResponseWriter, vault, name, version string) *store.KeyVersion {
 	var v *store.KeyVersion
 	var err error
 	if version == "" {
+		if err := s.maybeAutoRotate(vault, name); err != nil {
+			writeKVErr(w, http.StatusInternalServerError, "InternalServerError", err.Error())
+			return nil
+		}
 		v, err = s.Store.GetKey(vault, name)
 	} else {
 		v, err = s.Store.GetKeyVersion(vault, name, version)
@@ -375,24 +380,19 @@ func (s *Service) rotateKey(w http.ResponseWriter, r *http.Request, vault string
 	if v == nil {
 		return
 	}
-	priv, err := parseKey(v.PrivateDER)
+	nv, err := mintRotation(v)
 	if err != nil {
 		writeKVErr(w, http.StatusInternalServerError, "InternalServerError", err.Error())
 		return
 	}
-	size := 0
-	if rk, ok := priv.(*rsa.PrivateKey); ok {
-		size = rk.N.BitLen()
-	}
-	der, crv, err := generateKey(v.Kty, size, v.Crv)
+	// On-demand rotation honours the policy's expiryTime too, as real Key
+	// Vault applies the policy on every rotation however triggered.
+	pol, err := s.policyFor(vault, name)
 	if err != nil {
 		writeKVErr(w, http.StatusInternalServerError, "InternalServerError", err.Error())
 		return
 	}
-	nv := &store.KeyVersion{
-		Vault: vault, Name: name, Kty: v.Kty, Crv: crv, PrivateDER: der,
-		Enabled: true, KeyOpsJSON: v.KeyOpsJSON, TagsJSON: v.TagsJSON,
-	}
+	s.applyRotationExpiry(nv, pol)
 	if err := s.Store.SetKey(nv); err != nil {
 		writeKVErr(w, http.StatusInternalServerError, "InternalServerError", err.Error())
 		return
@@ -424,6 +424,20 @@ func (s *Service) cryptoOp(op string) handler {
 		if !slices.Contains(keyOps(v), jwkOp[op]) {
 			writeKVErr(w, http.StatusForbidden, "Forbidden",
 				fmt.Sprintf("Operation %s is not permitted on this key.", jwkOp[op]))
+			return
+		}
+		// nbf/exp are enforced for cryptographic use (real Key Vault refuses
+		// crypto with a key outside its validity window), while plain reads
+		// stay permissive as in the real service. The emulator clock decides.
+		now := s.Store.Now()
+		if v.Exp != nil && *v.Exp <= now {
+			writeKVErr(w, http.StatusForbidden, "Forbidden",
+				fmt.Sprintf("Operation %s is not permitted on an expired key.", jwkOp[op]))
+			return
+		}
+		if v.NBF != nil && *v.NBF > now {
+			writeKVErr(w, http.StatusForbidden, "Forbidden",
+				fmt.Sprintf("Operation %s is not permitted on a key that is not yet valid.", jwkOp[op]))
 			return
 		}
 		var body struct {

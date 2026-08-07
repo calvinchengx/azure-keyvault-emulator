@@ -643,6 +643,20 @@ func (s *Service) listCertificateVersions(w http.ResponseWriter, r *http.Request
 
 // ---- soft delete ----
 
+// cascadeDelete soft-deletes the certificate's linked key and secret — in
+// real Key Vault they are the same object addressed three ways, so deletion
+// carries all three. Absence is fine (a cert-only import materializes
+// neither); real storage errors are not.
+func (s *Service) cascadeDelete(vault, name string) error {
+	if _, err := s.Store.DeleteKey(vault, name, s.Cfg.SoftDeleteRetentionDays); err != nil && !errors.Is(err, store.ErrNotFound) {
+		return err
+	}
+	if _, err := s.Store.DeleteSecret(vault, name, s.Cfg.SoftDeleteRetentionDays); err != nil && !errors.Is(err, store.ErrNotFound) {
+		return err
+	}
+	return nil
+}
+
 func (s *Service) deleteCertificate(w http.ResponseWriter, r *http.Request, vault string) {
 	name := r.PathValue("name")
 	d, err := s.Store.DeleteCert(vault, name, s.Cfg.SoftDeleteRetentionDays)
@@ -651,6 +665,10 @@ func (s *Service) deleteCertificate(w http.ResponseWriter, r *http.Request, vaul
 		return
 	}
 	if err != nil {
+		writeKVErr(w, http.StatusInternalServerError, "InternalServerError", err.Error())
+		return
+	}
+	if err := s.cascadeDelete(vault, name); err != nil {
 		writeKVErr(w, http.StatusInternalServerError, "InternalServerError", err.Error())
 		return
 	}
@@ -726,6 +744,20 @@ func (s *Service) purgeCertificate(w http.ResponseWriter, r *http.Request, vault
 		writeKVErr(w, http.StatusInternalServerError, "InternalServerError", err.Error())
 		return
 	}
+	// Purge carries the linked key and secret when they were soft-deleted by
+	// the certificate's own deletion cascade.
+	if _, err := s.Store.GetDeletedKey(vault, name); err == nil {
+		if err := s.Store.PurgeKey(vault, name); err != nil {
+			writeKVErr(w, http.StatusInternalServerError, "InternalServerError", err.Error())
+			return
+		}
+	}
+	if _, err := s.Store.GetDeletedSecret(vault, name); err == nil {
+		if err := s.Store.PurgeSecret(vault, name); err != nil {
+			writeKVErr(w, http.StatusInternalServerError, "InternalServerError", err.Error())
+			return
+		}
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -741,6 +773,19 @@ func (s *Service) recoverCertificate(w http.ResponseWriter, r *http.Request, vau
 	if err := s.Store.RecoverCert(vault, name); err != nil {
 		writeKVErr(w, http.StatusInternalServerError, "InternalServerError", err.Error())
 		return
+	}
+	// Recovery restores the linked key and secret the deletion cascaded.
+	if _, err := s.Store.GetDeletedKey(vault, name); err == nil {
+		if err := s.Store.RecoverKey(vault, name); err != nil {
+			writeKVErr(w, http.StatusInternalServerError, "InternalServerError", err.Error())
+			return
+		}
+	}
+	if _, err := s.Store.GetDeletedSecret(vault, name); err == nil {
+		if err := s.Store.RecoverSecret(vault, name); err != nil {
+			writeKVErr(w, http.StatusInternalServerError, "InternalServerError", err.Error())
+			return
+		}
 	}
 	v, err := s.Store.GetCert(vault, name)
 	if err != nil {

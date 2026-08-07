@@ -1,7 +1,6 @@
 package vault
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -381,20 +380,16 @@ func (s *Service) backupSecret(w http.ResponseWriter, r *http.Request, vault str
 		writeKVErr(w, http.StatusInternalServerError, "InternalServerError", err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"value": base64.RawURLEncoding.EncodeToString(raw)})
+	sealed, ok := s.sealBackup(w, raw)
+	if !ok {
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"value": sealed})
 }
 
 func (s *Service) restoreSecret(w http.ResponseWriter, r *http.Request, vault string) {
-	var body struct {
-		Value string `json:"value"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Value == "" {
-		writeKVErr(w, http.StatusBadRequest, "BadParameter", "The request body must include a backup blob value.")
-		return
-	}
-	raw, err := base64.RawURLEncoding.DecodeString(body.Value)
-	if err != nil {
-		writeKVErr(w, http.StatusBadRequest, "BadParameter", "The backup blob is not valid base64url.")
+	raw, ok := s.decodeBackup(w, r)
+	if !ok {
 		return
 	}
 	var blob backupBlob
