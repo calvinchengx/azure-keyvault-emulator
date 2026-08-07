@@ -97,6 +97,8 @@ type jwkImport struct {
 	X      string   `json:"x"`
 	Y      string   `json:"y"`
 	KeyOps []string `json:"key_ops"`
+	// KeyHSM carries the BYOK transfer blob (the REST JWK's key_hsm member).
+	KeyHSM string `json:"key_hsm"`
 }
 
 // samePublicKey reports whether two public keys are equal, using the standard

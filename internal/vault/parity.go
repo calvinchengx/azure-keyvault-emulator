@@ -43,15 +43,24 @@ func (s *Service) getRandomBytes(w http.ResponseWriter, r *http.Request, _ strin
 func (s *Service) importKey(w http.ResponseWriter, r *http.Request, vault string) {
 	name := r.PathValue("name")
 	var body struct {
-		Key        jwkImport         `json:"key"`
-		Attributes *attributes       `json:"attributes"`
-		Tags       map[string]string `json:"tags"`
+		Key           jwkImport         `json:"key"`
+		Attributes    *attributes       `json:"attributes"`
+		Tags          map[string]string `json:"tags"`
+		ReleasePolicy json.RawMessage   `json:"release_policy"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Key.Kty == "" {
 		writeKVErr(w, http.StatusBadRequest, "BadParameter", "The request body must include a key with kty.")
 		return
 	}
-	der, kty, crv, err := importJWK(body.Key)
+	var der, kty, crv string
+	var err error
+	if body.Key.KeyHSM != "" {
+		// BYOK: a CKM_RSA_AES_KEY_WRAP transfer blob, unwrapped for real
+		// with the vault-held KEK the blob's header names.
+		der, kty, crv, err = s.importBYOK(vault, body.Key.KeyHSM)
+	} else {
+		der, kty, crv, err = importJWK(body.Key)
+	}
 	if err != nil {
 		writeKVErr(w, http.StatusBadRequest, "BadParameter", err.Error())
 		return
@@ -65,7 +74,13 @@ func (s *Service) importKey(w http.ResponseWriter, r *http.Request, vault string
 		if body.Attributes.Enabled != nil {
 			v.Enabled = *body.Attributes.Enabled
 		}
+		if body.Attributes.Exportable != nil {
+			v.Exportable = *body.Attributes.Exportable
+		}
 		v.NBF, v.Exp = body.Attributes.NBF, body.Attributes.Exp
+	}
+	if len(body.ReleasePolicy) > 0 {
+		v.ReleasePolicyJSON = string(body.ReleasePolicy)
 	}
 	if body.Tags != nil {
 		raw, _ := json.Marshal(body.Tags)
@@ -167,6 +182,12 @@ func (s *Service) restoreKey(w http.ResponseWriter, r *http.Request, vault strin
 func (s *Service) releaseKey(w http.ResponseWriter, r *http.Request, vault string) {
 	v := s.loadKey(w, vault, r.PathValue("name"), r.PathValue("version"))
 	if v == nil {
+		return
+	}
+	// Only an exportable key may be released, as real Key Vault enforces.
+	if !v.Exportable {
+		writeKVErr(w, http.StatusForbidden, "Forbidden",
+			"Operation release is not allowed on a non-exportable key.")
 		return
 	}
 	var body struct {

@@ -206,9 +206,22 @@ func TestAzkeysRelease(t *testing.T) {
 	kc := f.keysClient(t)
 	ctx := context.Background()
 
-	created, err := kc.CreateKey(ctx, "releasable", azkeys.CreateKeyParameters{Kty: to.Ptr(azkeys.KeyTypeRSA)}, nil)
+	// Real Key Vault releases only exportable keys; the SDK sets the flag.
+	created, err := kc.CreateKey(ctx, "releasable", azkeys.CreateKeyParameters{
+		Kty:           to.Ptr(azkeys.KeyTypeRSA),
+		KeyAttributes: &azkeys.KeyAttributes{Exportable: to.Ptr(true)},
+	}, nil)
 	if err != nil {
 		t.Fatalf("CreateKey: %v", err)
+	}
+	// A non-exportable key refuses release, as the real service does.
+	plain, err := kc.CreateKey(ctx, "unreleasable", azkeys.CreateKeyParameters{Kty: to.Ptr(azkeys.KeyTypeRSA)}, nil)
+	if err != nil {
+		t.Fatalf("CreateKey plain: %v", err)
+	}
+	if _, err := kc.Release(ctx, "unreleasable", plain.Key.KID.Version(),
+		azkeys.ReleaseParameters{TargetAttestationToken: to.Ptr("t")}, nil); err == nil {
+		t.Fatal("release of a non-exportable key succeeded")
 	}
 	resp, err := kc.Release(ctx, "releasable", created.Key.KID.Version(), azkeys.ReleaseParameters{
 		TargetAttestationToken: to.Ptr("emulator-attestation"),
@@ -225,6 +238,22 @@ func TestAzcertificatesMerge(t *testing.T) {
 	f := newFixture(t)
 	cc := f.certsClient(t)
 	ctx := context.Background()
+
+	// A named issuer must be registered first, as real Key Vault requires —
+	// via the real SDK. An unregistered name is refused.
+	if _, err := cc.CreateCertificate(ctx, "external", azcertificates.CreateCertificateParameters{
+		CertificatePolicy: &azcertificates.CertificatePolicy{
+			IssuerParameters:          &azcertificates.IssuerParameters{Name: to.Ptr("MyExternalCA")},
+			X509CertificateProperties: &azcertificates.X509CertificateProperties{Subject: to.Ptr("CN=external.test")},
+		},
+	}, nil); err == nil {
+		t.Fatal("create with an unregistered issuer succeeded")
+	}
+	if _, err := cc.SetIssuer(ctx, "MyExternalCA", azcertificates.SetIssuerParameters{
+		Provider: to.Ptr("Test"),
+	}, nil); err != nil {
+		t.Fatalf("SetIssuer: %v", err)
+	}
 
 	// A named issuer produces a pending operation with a CSR.
 	op, err := cc.CreateCertificate(ctx, "external", azcertificates.CreateCertificateParameters{
