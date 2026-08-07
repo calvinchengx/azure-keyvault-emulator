@@ -115,7 +115,7 @@ surface the operation):
       current SDKs send; the create-operation LRO now reports
       `inProgress` → `completed` as the real service does.
 
-## P6 — remaining distance to full parity *(shipped in v0.5.0)*
+## P6 — remaining distance to full parity *(shipped in v0.4.0)*
 
 The whole remaining gap between the emulator and real Key Vault, in three
 honesty grades. Everything not listed here is either already 🟢 in
@@ -162,6 +162,36 @@ Sequencing: enforcement first (nbf/exp, cascade — small, immediately
 SDK-witnessable), then sealing + multi-issuer, then the rotation engine, then
 authorization. Each lands with Go tests inside the ≥90% floor; the Python
 suite witnesses the expiry refusal with a real SDK.
+
+## P7 — full parity *(shipped in v0.4.0)*
+
+The final stretch: everything still short of 🟢 that can move without faking
+a trust property.
+
+- [x] **BYOK for real** — `PUT /keys/{name}` accepts the `.byok` transfer
+      blob (`key_hsm`): the KEK lives in this vault, and the emulator
+      genuinely undoes `CKM_RSA_AES_KEY_WRAP` — RSA-OAEP(SHA-1) unwraps the
+      ephemeral AES-256 key, AES-KWP (RFC 5649, clean-room) unwraps the
+      target key. The round-trip test proves possession by verifying a
+      vault-produced signature against the original public key. The KEK is
+      software-held, per the documented HSM normalisation.
+- [x] **Exportable + release policy** — only a key created
+      `attributes.exportable: true` may be released, as real Key Vault
+      enforces; `release_policy` is stored, echoed on the bundle, and carried
+      through rotation. Attestation remains the honest boundary.
+- [x] **Issuer registry drives issuance** — a named issuer must be
+      registered under `/certificates/issuers` before it can issue
+      (`Unknown` remains the external-CSR escape hatch), as the real service
+      requires.
+- [x] **Object-scoped authorization** — allowlist entries accept
+      `{type}/{op}:{object}`, and RBAC assignments accept
+      `scope: "/keys/{name}"` — the same object-level scoping data-plane
+      RBAC supports. Operations without an object (list, restore) need
+      vault-level grants, as in real RBAC.
+- [x] **Soft-delete regraded** — the delete→recover→purge state machine and
+      clock-driven retention were always real enforced logic; lazy purge on
+      observation is indistinguishable from a background job to any caller.
+      The parity map now grades them accordingly.
 
 ## Cross-cutting (throughout)
 

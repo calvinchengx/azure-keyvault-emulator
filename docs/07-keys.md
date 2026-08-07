@@ -10,7 +10,7 @@ Software-protected only (no HSM).
 | Method + path | Purpose |
 |---|---|
 | `POST /keys/{name}/create` | create — `{kty, key_size?/crv?, key_ops?, attributes?, tags?}` → key bundle |
-| `PUT /keys/{name}` | **import** a caller-supplied JWK (`{key:{kty,…private members}, attributes?, tags?}`) |
+| `PUT /keys/{name}` | **import** a caller-supplied JWK (`{key:{kty,…private members}, attributes?, tags?}`) — or a **BYOK transfer blob** (`key.key_hsm`): the vault-held KEK named in the blob's header genuinely undoes `CKM_RSA_AES_KEY_WRAP` (RSA-OAEP-SHA1 + AES-KWP) |
 | `GET /keys/{name}` \| `/keys/{name}/{version}` | get the public JWK |
 | `PATCH /keys/{name}/{version}` \| `/keys/{name}` | update `key_ops`/attributes/tags (versioned or latest) |
 | `GET /keys` \| `/keys/{name}/versions` | list (paged) |
@@ -18,7 +18,7 @@ Software-protected only (no HSM).
 | `POST /keys/{name}/backup` · `POST /keys/restore` | opaque backup blob (all versions) → restore into an empty name |
 | `GET` \| `PUT /keys/{name}/rotationpolicy` | rotation policy — and it **acts**: a `Rotate` trigger's `timeAfterCreate` rotates lazily on the emulator clock; `attributes.expiryTime` sets the new version's `exp` |
 | `POST /keys/{name}/rotate` | on-demand rotation: a new version with fresh material of the same type/size; `key_ops`/tags carry over |
-| `POST /keys/{name}/{version}/release` | Secure Key Release → `{value}` (a signed JWS carrying the released public JWK) |
+| `POST /keys/{name}/{version}/release` | Secure Key Release → `{value}` (a signed JWS carrying the released public JWK). Only a key created `attributes.exportable: true` releases, as real KV enforces; `release_policy` is stored and echoed |
 | `GET/DELETE /deletedkeys/{name}`, `GET /deletedkeys`, `POST /deletedkeys/{name}/recover` | deleted-key lifecycle |
 | `POST /rng` | `{count}` (1–128) → `{value}` cryptographically-random base64url bytes |
 

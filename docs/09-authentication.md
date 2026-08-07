@@ -94,6 +94,12 @@ Officer. Unknown permission or role names are refused (400), so a typo cannot
 silently widen access. `{"accessPolicies": []}` / `{"assignments": []}`
 restore full access.
 
+Assignments scope to a single object, as data-plane RBAC supports — add
+`"scope": "/keys/{name}"` (or `/secrets/…`, `/certificates/…`) to an
+assignment, or use `{type}/{op}:{object}` entries in the raw allowlist.
+Operations without an object of their own (list, restore, rng) require a
+vault-level (unscoped) grant, exactly as in real RBAC.
+
 ## localhost vs DNS-pinned
 
 The SDK's challenge-resource verification expects the vault host to end in
