@@ -17,6 +17,7 @@ Software-protected only (no HSM).
 | `DELETE /keys/{name}` | soft-delete |
 | `POST /keys/{name}/backup` · `POST /keys/restore` | opaque backup blob (all versions) → restore into an empty name |
 | `GET` \| `PUT /keys/{name}/rotationpolicy` | rotation policy (round-tripped; unset returns the disabled-rotation default) |
+| `POST /keys/{name}/rotate` | on-demand rotation: a new version with fresh material of the same type/size; `key_ops`/tags carry over |
 | `POST /keys/{name}/{version}/release` | Secure Key Release → `{value}` (a signed JWS carrying the released public JWK) |
 | `GET/DELETE /deletedkeys/{name}`, `GET /deletedkeys`, `POST /deletedkeys/{name}/recover` | deleted-key lifecycle |
 | `POST /rng` | `{count}` (1–128) → `{value}` cryptographically-random base64url bytes |
@@ -44,15 +45,21 @@ Vault signs a digest), matching AKV semantics.
 | `POST /keys/{name}/{version}/encrypt` \| `/decrypt` | `RSA1_5`, `RSA-OAEP`, `RSA-OAEP-256` |
 | `POST /keys/{name}/{version}/wrapKey` \| `/unwrapKey` | `RSA-OAEP`, `RSA-OAEP-256`, `RSA1_5` |
 
+`key_ops` is **enforced**: an operation outside the key's list returns
+`403 Forbidden`, and because the returned JWK carries the same `key_ops`,
+SDKs that run public-key operations locally refuse them client-side too.
+
 ## Supported key types
 
 - **RSA** — key sizes 2048 / 3072 / 4096.
 - **EC** — curves P-256 / P-384 / P-521.
 
 `RSA-HSM` / `EC-HSM` `kty` values are accepted and normalized to their
-software equivalents (there is no HSM). The **private key never leaves the
-store**; every response derives the public JWK (`n`/`e` for RSA, `crv`/`x`/`y`
-for EC).
+software equivalents (there is no HSM). `oct` / `oct-HSM` are **refused with
+the real error** — vaults hold RSA/EC keys only; symmetric keys (and their AES
+algorithms) require Managed HSM, which is out of scope. The **private key
+never leaves the store**; every response derives the public JWK (`n`/`e` for
+RSA, `crv`/`x`/`y` for EC).
 
 ## The interop guarantee
 

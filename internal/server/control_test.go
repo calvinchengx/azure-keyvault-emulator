@@ -79,4 +79,18 @@ func TestControlSurface(t *testing.T) {
 	if w := s.hit(t, "GET", "/secrets?api-version=7.5", ""); w.Code != http.StatusInternalServerError {
 		t.Fatalf("rejected request = %d; want 500", w.Code)
 	}
+	// Purge protection: toggle on, toggle off, malformed body 400.
+	if w := s.hit(t, "POST", "/_emulator/purge-protection", `{"enabled":true}`); w.Code != http.StatusOK ||
+		!strings.Contains(w.Body.String(), `"enabled":true`) {
+		t.Fatalf("purge-protection on = %d %s", w.Code, w.Body.String())
+	}
+	if w := s.hit(t, "POST", "/_emulator/purge-protection", `{"enabled":false}`); w.Code != http.StatusOK {
+		t.Fatalf("purge-protection off = %d", w.Code)
+	}
+	if w := s.hit(t, "POST", "/_emulator/purge-protection", `{}`); w.Code != http.StatusBadRequest {
+		t.Fatalf("purge-protection empty body = %d; want 400", w.Code)
+	}
+	if w := s.hit(t, "POST", "/_emulator/purge-protection", `{nope`); w.Code != http.StatusBadRequest {
+		t.Fatalf("purge-protection bad body = %d; want 400", w.Code)
+	}
 }

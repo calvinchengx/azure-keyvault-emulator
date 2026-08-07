@@ -12,6 +12,7 @@ both are set. Only the Entra issuer is required.
 | `--entra-tls-insecure` | `KV_ENTRA_TLS_INSECURE` | `false` | Skip TLS verification when fetching JWKS — for entra-emulator's self-signed cert on a compose network. |
 | `--default-vault` | `KV_DEFAULT_VAULT` | `emulator` | The vault served on non-vault hosts (`localhost`, IPs). |
 | `--soft-delete-retention-days` | `KV_SOFT_DELETE_RETENTION_DAYS` | `90` | Soft-delete recovery window (7–90). Rejected outside that range. |
+| `--purge-protection` | `KV_PURGE_PROTECTION` | off | Refuse purge (`403`) and report `recoveryLevel: Recoverable`, as a purge-protected vault does. Also toggleable at runtime: `POST /_emulator/purge-protection {"enabled": true}`. |
 | `--disable-tls` | `KV_DISABLE_TLS` | `false` | Serve plain HTTP (behind a TLS-terminating proxy, or for curl exploration). |
 
 ## Derived fields

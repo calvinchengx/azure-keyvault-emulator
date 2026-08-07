@@ -93,6 +93,28 @@ SDK-observable surface.
       async-issuance path fully offline. A live third-party CA remains the only
       certificate non-goal (the emulator never phones out).
 
+## P5 — real-service fidelity *(shipped in v0.4.0)*
+
+Close the remaining implementable gaps against real Key Vault, each landed
+with its witness (Go test + the multi-language SDK suites where the SDKs
+surface the operation):
+
+- [x] **Rotate key** (`POST /keys/{name}/rotate`) — a new version with fresh
+      material of the same type and size; `key_ops`/tags carry over.
+- [x] **`key_ops` enforcement** — operations outside the key's list get
+      `403 Forbidden`; the JWK's `key_ops` also drives SDK-local refusal.
+- [x] **Certificate operation cancel + delete** (`PATCH`/`DELETE`
+      `/certificates/{name}/pending`) — cancelled operations refuse merge;
+      deleted operations read absent until the next create.
+- [x] **Purge protection** (`-purge-protection`, `KV_PURGE_PROTECTION`,
+      `/_emulator/purge-protection`) — purge `403`s, `recoveryLevel` reports
+      `Recoverable`.
+- [x] **`oct`/`oct-HSM` refused faithfully** — vaults hold RSA/EC only;
+      symmetric keys (and their AES algorithms) are Managed HSM territory.
+- [x] **`api-version` required + validated** — 7.x and the date-based versions
+      current SDKs send; the create-operation LRO now reports
+      `inProgress` → `completed` as the real service does.
+
 ## Cross-cutting (throughout)
 
 - [x] CI: vet/build/test + 90% coverage floor + the three-emulator chain e2e.

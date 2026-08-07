@@ -184,7 +184,7 @@ func (s *Service) certAttrs(v *store.CertVersion) attributes {
 	return attributes{
 		Enabled: &v.Enabled, NBF: v.NBF, Exp: v.Exp,
 		Created: v.CreatedAt, Updated: v.UpdatedAt,
-		RecoveryLevel: "Recoverable+Purgeable", RecoverableDays: s.Cfg.SoftDeleteRetentionDays,
+		RecoveryLevel: s.recoveryLevel(), RecoverableDays: s.Cfg.SoftDeleteRetentionDays,
 	}
 }
 
@@ -269,6 +269,11 @@ func (s *Service) createCertificate(w http.ResponseWriter, r *http.Request, vaul
 		writeKVErr(w, http.StatusInternalServerError, "InternalServerError", err.Error())
 		return
 	}
+	// A fresh create restores the operation for callers that deleted it.
+	if err := s.Store.ClearCertOpDeleted(vault, name); err != nil {
+		writeKVErr(w, http.StatusInternalServerError, "InternalServerError", err.Error())
+		return
+	}
 	writeJSON(w, http.StatusAccepted, s.certOperation(r, name, "inProgress"))
 }
 
@@ -283,17 +288,22 @@ func (s *Service) certOperation(r *http.Request, name, status string) map[string
 	}
 }
 
-// pendingOperation is the CertificateOperation for an in-progress (external
-// issuer) request: status "inProgress" and the CSR the caller must sign.
+// pendingOperation is the CertificateOperation for an external-issuer
+// request: status "inProgress" (or "cancelled") and the CSR the caller signs.
 func (s *Service) pendingOperation(r *http.Request, p *store.PendingCert) map[string]any {
 	csr, _ := base64.StdEncoding.DecodeString(p.CSRDER)
+	status := "inProgress"
+	if p.Cancelled {
+		status = "cancelled"
+	}
 	return map[string]any{
-		"id":         fmt.Sprintf("%s/certificates/%s/pending", s.baseURL(r), p.Name),
-		"status":     "inProgress",
-		"target":     fmt.Sprintf("%s/certificates/%s", s.baseURL(r), p.Name),
-		"issuer":     map[string]string{"name": p.Issuer},
-		"csr":        csr,
-		"request_id": store.NewVersionID(),
+		"id":                     fmt.Sprintf("%s/certificates/%s/pending", s.baseURL(r), p.Name),
+		"status":                 status,
+		"cancellation_requested": p.Cancelled,
+		"target":                 fmt.Sprintf("%s/certificates/%s", s.baseURL(r), p.Name),
+		"issuer":                 map[string]string{"name": p.Issuer},
+		"csr":                    csr,
+		"request_id":             store.NewVersionID(),
 	}
 }
 
@@ -321,20 +331,116 @@ func (s *Service) createPendingCertificate(w http.ResponseWriter, r *http.Reques
 		writeKVErr(w, http.StatusInternalServerError, "InternalServerError", err.Error())
 		return
 	}
+	// A fresh create restores the operation for callers that deleted it.
+	if err := s.Store.ClearCertOpDeleted(vault, p.Name); err != nil {
+		writeKVErr(w, http.StatusInternalServerError, "InternalServerError", err.Error())
+		return
+	}
 	writeJSON(w, http.StatusAccepted, s.pendingOperation(r, p))
 }
 
 // getCertificateOperation is GET /certificates/{name}/pending. A pending
 // external-issuer request reports "inProgress" with its CSR; an issued cert
-// reports "completed".
+// reports "completed"; a deleted operation is gone until the next create.
 func (s *Service) getCertificateOperation(w http.ResponseWriter, r *http.Request, vault string) {
 	name := r.PathValue("name")
+	if deleted, err := s.Store.CertOpDeleted(vault, name); err != nil {
+		writeKVErr(w, http.StatusInternalServerError, "InternalServerError", err.Error())
+		return
+	} else if deleted {
+		certOpNotFound(w, name)
+		return
+	}
 	if p, err := s.Store.GetPendingCert(vault, name); err == nil {
 		writeJSON(w, http.StatusOK, s.pendingOperation(r, p))
 		return
 	}
 	if _, err := s.Store.GetCert(vault, name); err != nil {
 		certNotFound(w, name)
+		return
+	}
+	writeJSON(w, http.StatusOK, s.certOperation(r, name, "completed"))
+}
+
+func certOpNotFound(w http.ResponseWriter, name string) {
+	writeKVErr(w, http.StatusNotFound, "PendingCertificateNotFound",
+		fmt.Sprintf("A pending certificate operation for %s was not found in this key vault.", name))
+}
+
+// cancelCertificateOperation is PATCH /certificates/{name}/pending: honour
+// cancellation_requested on an in-progress external-issuer operation. A
+// completed operation cannot be cancelled, as in real Key Vault.
+func (s *Service) cancelCertificateOperation(w http.ResponseWriter, r *http.Request, vault string) {
+	name := r.PathValue("name")
+	var body struct {
+		CancellationRequested bool `json:"cancellation_requested"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeKVErr(w, http.StatusBadRequest, "BadParameter", "Malformed JSON body.")
+		return
+	}
+	p, err := s.Store.GetPendingCert(vault, name)
+	if err == nil {
+		if body.CancellationRequested {
+			if cerr := s.Store.CancelPendingCert(vault, name); cerr != nil {
+				writeKVErr(w, http.StatusInternalServerError, "InternalServerError", cerr.Error())
+				return
+			}
+			p.Cancelled = true
+		}
+		writeJSON(w, http.StatusOK, s.pendingOperation(r, p))
+		return
+	}
+	if !errors.Is(err, store.ErrNotFound) {
+		writeKVErr(w, http.StatusInternalServerError, "InternalServerError", err.Error())
+		return
+	}
+	if _, err := s.Store.GetCert(vault, name); errors.Is(err, store.ErrNotFound) {
+		certNotFound(w, name)
+		return
+	} else if err != nil {
+		writeKVErr(w, http.StatusInternalServerError, "InternalServerError", err.Error())
+		return
+	}
+	writeKVErr(w, http.StatusBadRequest, "BadParameter",
+		"Certificate operation is not in progress and cannot be cancelled.")
+}
+
+// deleteCertificateOperation is DELETE /certificates/{name}/pending: the
+// operation is returned and then reads as absent. Deleting an in-progress
+// external-issuer operation discards its generated key, as real Key Vault
+// warns; the next create for the name starts a fresh operation.
+func (s *Service) deleteCertificateOperation(w http.ResponseWriter, r *http.Request, vault string) {
+	name := r.PathValue("name")
+	p, err := s.Store.GetPendingCert(vault, name)
+	if err == nil {
+		if derr := s.Store.DeletePendingCert(vault, name); derr != nil {
+			writeKVErr(w, http.StatusInternalServerError, "InternalServerError", derr.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, s.pendingOperation(r, p))
+		return
+	}
+	if !errors.Is(err, store.ErrNotFound) {
+		writeKVErr(w, http.StatusInternalServerError, "InternalServerError", err.Error())
+		return
+	}
+	if deleted, err := s.Store.CertOpDeleted(vault, name); err != nil {
+		writeKVErr(w, http.StatusInternalServerError, "InternalServerError", err.Error())
+		return
+	} else if deleted {
+		certOpNotFound(w, name)
+		return
+	}
+	if _, err := s.Store.GetCert(vault, name); errors.Is(err, store.ErrNotFound) {
+		certNotFound(w, name)
+		return
+	} else if err != nil {
+		writeKVErr(w, http.StatusInternalServerError, "InternalServerError", err.Error())
+		return
+	}
+	if err := s.Store.DeleteCertOp(vault, name); err != nil {
+		writeKVErr(w, http.StatusInternalServerError, "InternalServerError", err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, s.certOperation(r, name, "completed"))
@@ -355,6 +461,11 @@ func (s *Service) mergeCertificate(w http.ResponseWriter, r *http.Request, vault
 	}
 	if err != nil {
 		writeKVErr(w, http.StatusInternalServerError, "InternalServerError", err.Error())
+		return
+	}
+	if p.Cancelled {
+		writeKVErr(w, http.StatusBadRequest, "BadParameter",
+			"The certificate operation was cancelled and cannot be merged.")
 		return
 	}
 	var body struct {
@@ -483,6 +594,11 @@ func (s *Service) importCertificate(w http.ResponseWriter, r *http.Request, vaul
 			return
 		}
 	}
+	// An import establishes a completed operation for the name again.
+	if err := s.Store.ClearCertOpDeleted(vault, name); err != nil {
+		writeKVErr(w, http.StatusInternalServerError, "InternalServerError", err.Error())
+		return
+	}
 	writeJSON(w, http.StatusOK, s.certBundle(r, cv))
 }
 
@@ -595,6 +711,9 @@ func (s *Service) listDeletedCertificates(w http.ResponseWriter, r *http.Request
 }
 
 func (s *Service) purgeCertificate(w http.ResponseWriter, r *http.Request, vault string) {
+	if s.refusePurge(w) {
+		return
+	}
 	name := r.PathValue("name")
 	if _, err := s.Store.GetDeletedCert(vault, name); errors.Is(err, store.ErrNotFound) {
 		certNotFound(w, name)

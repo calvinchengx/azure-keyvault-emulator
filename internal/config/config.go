@@ -36,6 +36,10 @@ type Config struct {
 	DefaultVault string
 	// SoftDeleteRetentionDays is the recovery window (7–90, default 90).
 	SoftDeleteRetentionDays int
+	// PurgeProtection mirrors real Key Vault's vault property: purge is
+	// refused and recoveryLevel reports "Recoverable" while enabled. Also
+	// toggleable at runtime via POST /_emulator/purge-protection.
+	PurgeProtection bool
 
 	// DisableTLS serves plain HTTP.
 	DisableTLS bool
@@ -56,6 +60,7 @@ func FromEnvPartial() *Config {
 		EntraTLSInsecure:        boolEnv("KV_ENTRA_TLS_INSECURE"),
 		DefaultVault:            envOr("KV_DEFAULT_VAULT", "emulator"),
 		SoftDeleteRetentionDays: retention,
+		PurgeProtection:         boolEnv("KV_PURGE_PROTECTION"),
 		DisableTLS:              boolEnv("KV_DISABLE_TLS"),
 	}
 }

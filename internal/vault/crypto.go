@@ -47,6 +47,11 @@ func generateKey(kty string, keySize int, crv string) (string, string, error) {
 			return "", "", fmt.Errorf("unsupported curve %q", crv)
 		}
 		priv, err = ecdsa.GenerateKey(curve, rand.Reader)
+	case "oct", "oct-HSM":
+		// Real Key Vault (vaults, as opposed to Managed HSM) supports RSA
+		// and EC only; symmetric keys live in Managed HSM. Refuse as the
+		// real service does.
+		return "", "", fmt.Errorf("key type %s is not supported in this vault; symmetric keys require Managed HSM", kty)
 	default:
 		return "", "", fmt.Errorf("unsupported kty %q", kty)
 	}
@@ -117,6 +122,10 @@ func ktyOf(priv any) string {
 // plus the normalized kty and curve. RSA needs n/e/d/p/q; EC needs crv/x/y/d.
 func importJWK(j jwkImport) (privateDER, kty, crv string, err error) {
 	switch normalizeKty(j.Kty) {
+	case "oct", "oct-HSM":
+		// As in real Key Vault: vaults hold RSA/EC keys only; symmetric
+		// keys require Managed HSM.
+		return "", "", "", fmt.Errorf("key type %s is not supported in this vault; symmetric keys require Managed HSM", j.Kty)
 	case "RSA":
 		mods := map[string]string{"n": j.N, "e": j.E, "d": j.D, "p": j.P, "q": j.Q}
 		vals := map[string]*big.Int{}

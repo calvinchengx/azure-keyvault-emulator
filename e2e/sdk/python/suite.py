@@ -20,7 +20,7 @@ from azure.keyvault.keys.crypto import (CryptographyClient,
                                         EncryptionAlgorithm,
                                         SignatureAlgorithm)
 from azure.keyvault.secrets import SecretClient
-from azure.core.exceptions import ResourceNotFoundError
+from azure.core.exceptions import HttpResponseError, ResourceNotFoundError
 
 KV_URL = os.environ["KV_URL"]
 
@@ -92,6 +92,20 @@ def main():
     tampered = hashlib.sha256(b"tampered").digest()
     check("tampered digest rejected",
           not cc.verify(SignatureAlgorithm.rs256, tampered, sig.signature).is_valid)
+
+    rotated = kc.rotate_key("py-e2e-rsa")
+    check("rotate mints a new version",
+          rotated.properties.version != key.properties.version and rotated.key_type == "RSA")
+
+    restricted = kc.create_rsa_key("py-e2e-signonly", size=2048,
+                                   key_operations=["sign", "verify"])
+    rcc = CryptographyClient(
+        f"{KV_URL}/keys/{restricted.name}/{restricted.properties.version}", cred, **kw)
+    try:
+        rcc.encrypt(EncryptionAlgorithm.rsa_oaep, b"nope")
+        check("key_ops enforced", False)
+    except HttpResponseError as e:
+        check("key_ops enforced", e.status_code == 403, f"got {e.status_code}")
 
     # --- Certificates: self-signed issuance via the LRO poller ---
     print("CertificateClient")

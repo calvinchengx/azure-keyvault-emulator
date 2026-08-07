@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"github.com/calvinchengx/azure-keyvault-emulator/internal/clock"
 	_ "modernc.org/sqlite"
@@ -148,10 +149,25 @@ CREATE TABLE IF NOT EXISTS cert_pending (
 	kty TEXT NOT NULL,
 	issuer TEXT NOT NULL DEFAULT '',
 	created_at INTEGER NOT NULL,
+	cancelled INTEGER NOT NULL DEFAULT 0,
+	PRIMARY KEY (vault, name)
+);
+CREATE TABLE IF NOT EXISTS cert_ops_deleted (
+	vault TEXT NOT NULL,
+	name TEXT NOT NULL,
 	PRIMARY KEY (vault, name)
 );
 `)
-	return err
+	if err != nil {
+		return err
+	}
+	// Pre-v0.4.0 databases lack the cancelled column; the duplicate-column
+	// error on re-add is the "already migrated" signal.
+	if _, aerr := s.db.Exec(`ALTER TABLE cert_pending ADD COLUMN cancelled INTEGER NOT NULL DEFAULT 0`); aerr != nil &&
+		!strings.Contains(aerr.Error(), "duplicate column") {
+		return aerr
+	}
+	return nil
 }
 
 // NewVersionID returns a 32-hex version id, the format real Key Vault uses.

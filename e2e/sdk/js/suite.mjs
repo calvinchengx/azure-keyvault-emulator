@@ -80,6 +80,25 @@ const tampered = createHash("sha256").update("tampered").digest();
 check("tampered digest rejected",
   (await cc.verify("RS256", tampered, sig.result)).result === false);
 
+const rotated = await kc.rotateKey("js-e2e-rsa");
+check("rotate mints a new version",
+  rotated.properties.version !== key.properties.version && rotated.keyType === "RSA");
+
+const restricted = await kc.createRsaKey("js-e2e-signonly", { keySize: 2048, keyOps: ["sign", "verify"] });
+const rcc = new CryptographyClient(
+  `${KV_URL}/keys/${restricted.name}/${restricted.properties.version}`, cred, opts);
+try {
+  await rcc.encrypt({ algorithm: "RSA-OAEP", plaintext: Buffer.from("nope") });
+  check("key_ops enforced", false);
+} catch (e) {
+  // The JS SDK encrypts locally when it can and enforces the key_ops carried
+  // by the JWK we return, throwing before any service call; a service-side
+  // attempt gets our 403. Both paths are the emulator's key_ops at work.
+  check("key_ops enforced",
+    e.statusCode === 403 || /not (allowed|permitted|supported) on key/i.test(e.message),
+    `got ${e.statusCode}: ${e.message}`);
+}
+
 // --- Certificates: self-signed issuance via the LRO poller ---
 console.log("CertificateClient");
 const certClient = new CertificateClient(KV_URL, cred, opts);

@@ -47,6 +47,7 @@ func run(args []string) error {
 	fs.BoolVar(&cfg.EntraTLSInsecure, "entra-tls-insecure", cfg.EntraTLSInsecure, "skip TLS verification fetching JWKS")
 	fs.StringVar(&cfg.DefaultVault, "default-vault", cfg.DefaultVault, "vault served on non-vault hosts")
 	fs.IntVar(&cfg.SoftDeleteRetentionDays, "soft-delete-retention-days", cfg.SoftDeleteRetentionDays, "soft-delete recovery window (7-90)")
+	fs.BoolVar(&cfg.PurgeProtection, "purge-protection", cfg.PurgeProtection, "refuse purge; recoveryLevel reports Recoverable")
 	fs.BoolVar(&cfg.DisableTLS, "disable-tls", cfg.DisableTLS, "serve plain HTTP")
 	if err := fs.Parse(args); err != nil {
 		return err

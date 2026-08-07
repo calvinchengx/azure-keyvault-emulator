@@ -216,5 +216,66 @@
       "go:TestCryptoErrors",
       "go:TestKeyGetUpdateListErrors"
     ]
+  },
+  "rotate-key-post-keys-name-rotate": {
+    "section": "Keys (`keys/`)",
+    "claim": "Rotate key (`POST /keys/{name}/rotate`)",
+    "witnesses": [
+      "go:TestRotateKey",
+      "ci:python-sdk",
+      "ci:js-sdk",
+      "ci:dotnet-sdk"
+    ]
+  },
+  "keyops-enforcement": {
+    "section": "Keys (`keys/`)",
+    "claim": "`key_ops` enforcement",
+    "witnesses": [
+      "go:TestKeyOpsEnforced",
+      "ci:python-sdk",
+      "ci:js-sdk",
+      "ci:dotnet-sdk"
+    ]
+  },
+  "oct-oct-hsm-symmetric-keys-and-their-aes-algorithms": {
+    "section": "Keys (`keys/`)",
+    "claim": "`oct` / `oct-HSM` symmetric keys (and their AES algorithms)",
+    "witnesses": [
+      "go:TestOctIsManagedHSMOnly"
+    ]
+  },
+  "cancel-delete-a-certificate-operation": {
+    "section": "Certificates (`certificates/`)",
+    "claim": "Cancel / delete a certificate operation",
+    "witnesses": [
+      "go:TestCertOperationCancelAndDelete"
+    ]
+  },
+  "create-operation-lro-shape-inprogress-on-create-completed-on-poll": {
+    "section": "Certificates (`certificates/`)",
+    "claim": "Create operation LRO shape (`inProgress` on create \u2192 `completed` on poll)",
+    "witnesses": [
+      "ci:python-sdk",
+      "ci:js-sdk",
+      "ci:dotnet-sdk",
+      "go:TestAzcertificatesSelfSignedLifecycle"
+    ]
+  },
+  "purge-protection-non-purgeable-recoverylevel": {
+    "section": "Soft-delete & recovery",
+    "claim": "Purge protection / non-purgeable `recoveryLevel`",
+    "witnesses": [
+      "go:TestPurgeProtection"
+    ]
+  },
+  "api-version-validation": {
+    "section": "Vault addressing, TLS & the object model",
+    "claim": "`api-version` validation",
+    "witnesses": [
+      "go:TestAPIVersionValidation",
+      "ci:python-sdk",
+      "ci:js-sdk",
+      "ci:dotnet-sdk"
+    ]
   }
 }

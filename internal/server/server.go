@@ -115,6 +115,20 @@ func (s *Server) registerControl() {
 		s.Vault.SetPermissions(perms)
 		writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
 	})
+	// Vault-level purge protection ({"enabled": true}): purge is refused and
+	// recoveryLevel reports "Recoverable" while on. Real Key Vault can only
+	// ever enable it; the emulator allows both directions for tests.
+	s.mux.HandleFunc("POST /_emulator/purge-protection", func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Enabled *bool `json:"enabled"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Enabled == nil {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "body must be {\"enabled\": bool}"})
+			return
+		}
+		s.Vault.SetPurgeProtection(*body.Enabled)
+		writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "enabled": *body.Enabled})
+	})
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
