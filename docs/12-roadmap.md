@@ -67,10 +67,11 @@ challenge flow and round-trips secrets.
 
 Round out the secondary operations the Azure SDKs expose beyond core CRUD, so a
 test written against `azkeys` / `azcertificates` never hits an endpoint the
-emulator lacks. Measured against the reference
-[james-gould emulator](https://github.com/james-gould/azure-keyvault-emulator);
-we keep our real-auth and real-crypto posture throughout. With these, the
-emulator reaches **full parity** on the SDK-observable surface.
+emulator lacks. Measured against the
+[Key Vault REST API reference](https://learn.microsoft.com/en-us/rest/api/keyvault/)
+and what the real SDKs call; we keep our real-auth and real-crypto posture
+throughout. With these, the emulator reaches **full parity** on the
+SDK-observable surface.
 
 - [x] Keys: **import** a caller-supplied JWK (`PUT /keys/{name}`, real RSA/EC
       material — a subsequent sign/verify round-trips), update-latest

@@ -27,10 +27,9 @@ The emulator implements this faithfully **across services**:
   endpoint (`/msi/token`), Fabric workspace-identity tokens, or forged
   negative-test tokens.
 
-This is the deliberate contrast with the excellent
-[james-gould/azure-keyvault-emulator](https://github.com/james-gould/azure-keyvault-emulator),
-whose authentication accepts any token by design. Both are valid tools; this
-one is for testing the **credential path**, not only the storage path. See
+This is the deliberate contrast with pass-through emulators, whose
+authentication accepts any token by design. This one is for testing the
+**credential path**, not only the storage path. See
 [Authentication](09-authentication.md) for the handshake in depth.
 
 ### entra-emulator prerequisite
@@ -138,14 +137,23 @@ contract emulator for local dev/CI, **not a security boundary** — run it on
 
 ## Clean-room grounding
 
-Built only from public documentation and behavioral study — no Microsoft
-source. Pinned for reproducibility:
+Built only from Microsoft's public documentation — no Microsoft source, and no
+other emulator as reference. Real Azure Key Vault is the sole source of truth,
+approached from two directions:
 
-> `MicrosoftDocs/azure-security-docs @ cf2b4befe` (2026-07-10) —
-> `articles/key-vault/{general,secrets,keys,certificates}`
-> `james-gould/azure-keyvault-emulator @ 210582e` (2026-06-09) —
-> behavioral reference for SDK compatibility
+> **Documentation** — `MicrosoftDocs/azure-security-docs @ cf2b4befe`
+> (2026-07-10), `articles/key-vault/{general,secrets,keys,certificates}`, and
+> the [Key Vault REST API reference](https://learn.microsoft.com/en-us/rest/api/keyvault/)
+> (the per-operation wire contract).
+>
+> **Witnesses** — Microsoft's own SDKs, pinned and run in CI as the oracle:
+> Go (`azsecrets`/`azkeys`/`azcertificates` + `azidentity`, in `go test`),
+> Python (`azure-keyvault-*` + `azure-identity`, job `python-sdk`),
+> JavaScript (`@azure/keyvault-*` + `@azure/identity`, job `js-sdk`), and
+> .NET (`Azure.Security.KeyVault.*` + `Azure.Identity`, job `dotnet-sdk`).
+> Where the docs are ambiguous, whatever the real SDKs require wins — see
+> [parity.md](parity.md) for the claim-by-claim witness map.
 
 The data plane is versioned by the `api-version` query parameter (GA `7.5`; the
 emulator accepts any `7.x`). Re-audit by diffing the grounding files against
-those SHAs and bumping the pin.
+that SHA and bumping the pin.
