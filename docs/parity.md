@@ -134,8 +134,9 @@ therefore means "absent", not "honestly refused".
 | `azcertificates` (Azure Go SDK) | Certificate create/import/merge | 🟢 CI `test` |
 | `azidentity` (`ClientSecretCredential`) | The Entra challenge handshake, against an in-process real **entra-emulator** | 🟢 CI `test` |
 | Three-emulator chain (vault secret → managed identity → Entra → Fabric) | The family integration, incl. a negative test | 🟢 CI `chain` (stdlib HTTP, not an SDK) |
-| `azure-keyvault-secrets` / `azure-identity` (**Python**) | Documented in the quickstart | 🔴 Not wired in CI |
-| .NET / JavaScript SDKs | Asserted to work | 🔴 Not wired in CI |
+| `azure-keyvault-secrets`/`-keys`/`-certificates` + `azure-identity` (**Python**) | Challenge auth; secret lifecycle incl. soft-delete → recover → purge; RSA crypto via `CryptographyClient` with a tamper negative; self-signed certificate LRO | 🟢 CI `python-sdk` (3 OSes) |
+| `@azure/keyvault-secrets`/`-keys`/`-certificates` + `@azure/identity` (**JavaScript**) | Same surface as the Python suite | 🟢 CI `js-sdk` (3 OSes) |
+| `Azure.Security.KeyVault.{Secrets,Keys,Certificates}` + `Azure.Identity` (**.NET**) | Same surface as the Python suite | 🟢 CI `dotnet-sdk` (3 OSes) |
 
 The Go SDK tests are the real oracle: they reconstruct an `*rsa.PublicKey` from
 the returned JWK and verify an SDK-produced signature **outside** the SDK, with a

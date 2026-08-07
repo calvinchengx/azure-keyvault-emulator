@@ -5,7 +5,10 @@
     "witnesses": [
       "ci:chain",
       "go:TestChallengeHeaderShape",
-      "go:TestAzureSDKChallengeFlowAndSecretLifecycle"
+      "go:TestAzureSDKChallengeFlowAndSecretLifecycle",
+      "ci:python-sdk",
+      "ci:js-sdk",
+      "ci:dotnet-sdk"
     ]
   },
   "token-validation-rs256-jwks-issuer-audience-expiry": {
@@ -18,7 +21,7 @@
   },
   "principal-derivation-oid-sub-idtyp-app-service-principal": {
     "section": "Authentication & identity (`authentication/`)",
-    "claim": "Principal derivation (`oid` → `sub`; `idtyp=app` → service principal)",
+    "claim": "Principal derivation (`oid` \u2192 `sub`; `idtyp=app` \u2192 service principal)",
     "witnesses": [
       "go:TestPermissionMap"
     ]
@@ -29,7 +32,10 @@
     "witnesses": [
       "ci:chain",
       "go:TestAzureSDKChallengeFlowAndSecretLifecycle",
-      "go:TestSecretVersioning"
+      "go:TestSecretVersioning",
+      "ci:python-sdk",
+      "ci:js-sdk",
+      "ci:dotnet-sdk"
     ]
   },
   "versioning-32-hex-version-per-write": {
@@ -37,7 +43,10 @@
     "claim": "Versioning (32-hex version per write)",
     "witnesses": [
       "go:TestNewVersionIDShape",
-      "go:TestKeyVersioningAndLists"
+      "go:TestKeyVersioningAndLists",
+      "ci:python-sdk",
+      "ci:js-sdk",
+      "ci:dotnet-sdk"
     ]
   },
   "attributes-enabled": {
@@ -49,26 +58,35 @@
   },
   "create-key-rsa-2048-3072-4096-ec-p-256-p-384-p-521": {
     "section": "Keys (`keys/`)",
-    "claim": "Create key — **RSA** 2048/3072/4096, **EC** P-256/P-384/P-521",
+    "claim": "Create key \u2014 **RSA** 2048/3072/4096, **EC** P-256/P-384/P-521",
     "witnesses": [
       "go:TestAzkeysRSALifecycleAndCrypto",
-      "go:TestAzkeysECSignVerify"
+      "go:TestAzkeysECSignVerify",
+      "ci:python-sdk",
+      "ci:js-sdk",
+      "ci:dotnet-sdk"
     ]
   },
   "sign-verify-rs256-384-512-ps256-384-512-es256-384-512": {
     "section": "Keys (`keys/`)",
-    "claim": "Sign / verify — RS256/384/512, PS256/384/512, ES256/384/512",
+    "claim": "Sign / verify \u2014 RS256/384/512, PS256/384/512, ES256/384/512",
     "witnesses": [
       "go:TestAzkeysECSignVerify",
-      "go:TestAzkeysImportAndSign"
+      "go:TestAzkeysImportAndSign",
+      "ci:python-sdk",
+      "ci:js-sdk",
+      "ci:dotnet-sdk"
     ]
   },
   "encrypt-decrypt-rsa15-rsa-oaep-rsa-oaep-256": {
     "section": "Keys (`keys/`)",
-    "claim": "Encrypt / decrypt — RSA1_5, RSA-OAEP, RSA-OAEP-256",
+    "claim": "Encrypt / decrypt \u2014 RSA1_5, RSA-OAEP, RSA-OAEP-256",
     "witnesses": [
       "go:TestRSAEncryptRoundTrips",
-      "go:TestAzkeysRSALifecycleAndCrypto"
+      "go:TestAzkeysRSALifecycleAndCrypto",
+      "ci:python-sdk",
+      "ci:js-sdk",
+      "ci:dotnet-sdk"
     ]
   },
   "wrap-unwrap-key": {
@@ -105,7 +123,10 @@
     "section": "Certificates (`certificates/`)",
     "claim": "Create self-signed certificate",
     "witnesses": [
-      "go:TestAzcertificatesSelfSignedLifecycle"
+      "go:TestAzcertificatesSelfSignedLifecycle",
+      "ci:python-sdk",
+      "ci:js-sdk",
+      "ci:dotnet-sdk"
     ]
   },
   "certificate-policy-keyprops-x509props-issuer": {
@@ -118,7 +139,7 @@
   },
   "import-pkcs-12-pfx-and-pem-pkcs-8-pkcs-1-sec1": {
     "section": "Certificates (`certificates/`)",
-    "claim": "Import — PKCS#12 (PFX) and PEM (PKCS#8 / PKCS#1 / SEC1)",
+    "claim": "Import \u2014 PKCS#12 (PFX) and PEM (PKCS#8 / PKCS#1 / SEC1)",
     "witnesses": [
       "go:TestAzcertificatesImportPKCS12",
       "go:TestImportCertificateBranches"
@@ -128,7 +149,10 @@
     "section": "Certificates (`certificates/`)",
     "claim": "Linked key + secret materialised under the same name",
     "witnesses": [
-      "go:TestImportMaterializesKeyAndSecret"
+      "go:TestImportMaterializesKeyAndSecret",
+      "ci:python-sdk",
+      "ci:js-sdk",
+      "ci:dotnet-sdk"
     ]
   },
   "certificate-signing-request-pkcs-10-for-a-named-issuer": {
@@ -148,7 +172,7 @@
   },
   "name-reuse-while-soft-deleted-409-conflict": {
     "section": "Soft-delete & recovery",
-    "claim": "Name reuse while soft-deleted → `409 Conflict`",
+    "claim": "Name reuse while soft-deleted \u2192 `409 Conflict`",
     "witnesses": [
       "go:TestKeySoftDeleteHandlers",
       "go:TestCertSoftDeleteHandlers"

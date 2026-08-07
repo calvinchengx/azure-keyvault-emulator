@@ -64,5 +64,13 @@ curl -sk -X POST https://localhost:8444/_emulator/permissions \
 - Real-SDK e2e for all three object types (`azsecrets`, `azkeys`,
   `azcertificates`) completing challenge-based auth against in-process
   entra-emulator.
+- The real-SDK witness matrix (`e2e/sdk/run.py`): Microsoft's **Python**
+  (`azure-keyvault-*`), **JavaScript** (`@azure/keyvault-*`) and **.NET**
+  (`Azure.Security.KeyVault.*`) SDKs, pinned, each completing challenge auth
+  and exercising secrets (soft-delete → recover → purge), RSA crypto through
+  `CryptographyClient` (with a tampered-signature negative), and the
+  self-signed certificate LRO — on Linux, macOS and Windows in CI.
 - The [three-emulator chain](11-family-integration.md) (`e2e/chain/run.py`).
 - A ≥90% coverage floor, enforced in CI.
+- Every 🟢 claim in the [parity map](parity.md) names its witness, enforced by
+  `scripts/check_witnesses.py --strict` in CI.

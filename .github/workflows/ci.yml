@@ -71,6 +71,74 @@ jobs:
       # processes, all on the production trust relationships.
       - run: python3 e2e/chain/run.py
 
+  python-sdk:
+    name: Real Python SDK (azure-keyvault-*) against the emulator pair
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.25'
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          version: "0.11.32"
+      # Pinned azure-identity + azure-keyvault-{secrets,keys,certificates}
+      # complete challenge auth against a real entra-emulator, then exercise
+      # secrets (incl. soft-delete → recover → purge), RSA crypto through
+      # CryptographyClient, and the self-signed certificate LRO.
+      - run: python e2e/sdk/run.py python
+
+  js-sdk:
+    name: Real JavaScript SDK (@azure/keyvault-*) against the emulator pair
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.25'
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Same surface as the python suite, driven by the pinned @azure/identity
+      # + @azure/keyvault-{secrets,keys,certificates} packages.
+      - run: python e2e/sdk/run.py js
+
+  dotnet-sdk:
+    name: Real .NET SDK (Azure.Security.KeyVault.*) against the emulator pair
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.25'
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      # GitHub-hosted runners ship the .NET 8 SDK on all three OSes; the suite
+      # targets net8.0 with pinned Azure.Identity + Azure.Security.KeyVault.*.
+      - run: python e2e/sdk/run.py dotnet
+
   witnesses:
     name: Every 🟢 parity claim names its witness
     runs-on: ubuntu-latest
