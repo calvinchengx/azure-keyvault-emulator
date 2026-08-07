@@ -33,18 +33,12 @@ production**.
  azure-keyvault-emulator ── validates sig/iss/aud against entra's JWKS → 200
 ```
 
-## Why another Key Vault emulator?
+## Authentication is the point
 
-[james-gould/azure-keyvault-emulator](https://github.com/james-gould/azure-keyvault-emulator)
-is excellent and proves the SDK-compatibility ground: full `SecretClient` /
-`KeyClient` / `CertificateClient` support. But its authentication is
-deliberately a pass-through — any token is accepted (`ValidateIssuer=false`,
-`ValidateAudience=false`, a signature validator that decodes without
-verifying), with a built-in fake OAuth surface to satisfy the SDK challenge
-dance.
-
-This project makes the opposite trade: **authentication is the point.** Tokens
-are validated for real — signature against entra-emulator's JWKS, issuer,
+Most local Key Vault stand-ins treat authentication as a pass-through: any
+token is accepted, and a built-in fake OAuth surface satisfies the SDK
+challenge dance. This project makes the opposite trade. Tokens are validated
+for real — signature against entra-emulator's JWKS, issuer,
 `https://vault.azure.net` audience, expiry on a controllable clock — and the
 401 challenge advertises *entra-emulator's* authority, so
 `DefaultAzureCredential` walks the same two-step it walks in production. Your
@@ -53,14 +47,24 @@ managed-identity token from entra's MSI endpoint, a client-credentials token, a
 Fabric workspace-identity token — each either works or fails exactly as it
 would against real Azure.
 
+**Real Azure Key Vault is the sole reference**, approached from two
+directions: Microsoft's documentation (the
+[REST API reference](https://learn.microsoft.com/en-us/rest/api/keyvault/) and
+`azure-security-docs`, pinned) says what the service does, and Microsoft's own
+SDKs — Go, Python, JavaScript, .NET, pinned and run in CI — witness that this
+emulator does the same. Every capability claim in the
+[parity map](docs/parity.md) names the test or CI job that proves it.
+
 ## Status
 
 **Working** — secrets, keys (real RSA/EC cryptography), and certificates
-(self-signed + PFX/PEM import) are shipped, each verified end-to-end by the
-real Azure SDK (`azsecrets` / `azkeys` / `azcertificates`) completing
-challenge-based authentication against an in-process entra-emulator. Soft
-delete, versioning, backup/restore, and an optional per-principal permission
-map are in. Every package covers itself; 90%+ total with a CI floor.
+(self-signed + PFX/PEM import) are shipped, each verified end-to-end by real
+Microsoft SDKs in four languages — Go (`azsecrets` / `azkeys` /
+`azcertificates`), Python (`azure-keyvault-*`), JavaScript
+(`@azure/keyvault-*`) and .NET (`Azure.Security.KeyVault.*`) — completing
+challenge-based authentication against a real entra-emulator. Soft delete,
+versioning, backup/restore, and an optional per-principal permission map are
+in. Every package covers itself; 90%+ total with a CI floor.
 
 Install: `go install github.com/calvinchengx/azure-keyvault-emulator/cmd/azure-keyvault-emulator@latest`,
 `brew install calvinchengx/tap/azure-keyvault-emulator`,
@@ -120,7 +124,7 @@ the [Quickstart](docs/01-quickstart.md), then
 
 ## License
 
-Apache-2.0. Clean-room: grounded in Microsoft's public documentation
-([`MicrosoftDocs/azure-security-docs`](https://github.com/MicrosoftDocs/azure-security-docs),
-the Key Vault REST reference) and behavioral study of the MIT-licensed
-james-gould emulator — no Microsoft source.
+Apache-2.0. Clean-room: grounded solely in Microsoft's public documentation
+([`MicrosoftDocs/azure-security-docs`](https://github.com/MicrosoftDocs/azure-security-docs)
+and the [Key Vault REST API reference](https://learn.microsoft.com/en-us/rest/api/keyvault/)),
+with Microsoft's own SDKs as the conformance oracle — no Microsoft source.
