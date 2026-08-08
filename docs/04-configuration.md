@@ -17,8 +17,7 @@ both are set. Only the Entra issuer is required.
 | `--arm-subscription` | `KV_ARM_SUBSCRIPTION` | `00000000-…-0001` | Used to derive the scope. |
 | `--arm-resource-group` | `KV_ARM_RESOURCE_GROUP` | `emulator-rg` | Used to derive the scope. |
 | — | `KV_ARM_POLL_SECONDS` | `5` | How often the ARM authorization feed is refreshed. |
-| `--purge-protection` | `KV_PURGE_PROTECTION` | off |
-| ~~`--purge-protection`~~ | | | Refuse purge (`403`) and report `recoveryLevel: Recoverable`, as a purge-protected vault does. Also toggleable at runtime: `POST /_emulator/purge-protection {"enabled": true}`. |
+| `--purge-protection` | `KV_PURGE_PROTECTION` | off | Refuse purge (`403`) and report `recoveryLevel: Recoverable`, as a purge-protected vault does. Also toggleable at runtime: `POST /_emulator/purge-protection {"enabled": true}`. |
 | `--disable-tls` | `KV_DISABLE_TLS` | `false` | Serve plain HTTP (behind a TLS-terminating proxy, or for curl exploration). |
 
 ## Derived fields
@@ -70,3 +69,14 @@ emulator's behaviour, exactly as it changes a real vault's. Two guards:
   configured scope, the flags stay in force — absence is not an instruction.
 - **An out-of-range window is ignored** rather than applied, the same 7–90
   validation the flag gets.
+
+To try it, layer the ARM overlay onto the compose stack — it starts
+arm-emulator and sets the two variables for you:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.arm.yml up   # or: make up ARM=1
+```
+
+The overlay is separate from `docker-compose.yml` on purpose: the base stack
+pulls only images this repo and entra publish, so `make up` never waits on
+another repo's release.

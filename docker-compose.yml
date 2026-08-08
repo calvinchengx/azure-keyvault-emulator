@@ -3,6 +3,10 @@
 # relationships as production Azure. Bring up the pair (entra + keyvault) or
 # the full trio (add fabric) and run e2e/chain/run.sh's flow against the
 # published ports.
+#
+# This file is deliberately self-contained: it pulls only images this repo and
+# entra publish, so `make up` never waits on another repo's release. ARM is a
+# separate overlay (docker-compose.arm.yml) for exactly that reason.
 services:
   entra-emulator:
     image: ghcr.io/calvinchengx/entra-emulator:latest
@@ -10,30 +14,11 @@ services:
       ORIGIN_MODE: compat
       PUBLIC_ORIGIN: "https://entra-emulator:8443"
     ports:
-      - "8443:8443"
+      # Overridable so the stack can coexist with anything already on the
+      # default port: ENTRA_PORT=18443 docker compose up.
+      - "${ENTRA_PORT:-8443}:8443"
     healthcheck:
       test: ["CMD", "/usr/local/bin/entra-emulator", "healthcheck"]
-      interval: 5s
-      timeout: 2s
-      retries: 10
-
-  # The management plane: role assignments and the vault resource live here,
-  # exactly as they do in Azure. With it running, `az role assignment create`
-  # and `az keyvault set-policy` govern the vault below.
-  arm-emulator:
-    image: ghcr.io/calvinchengx/arm-emulator:latest
-    depends_on:
-      entra-emulator:
-        condition: service_healthy
-    ports:
-      - "${ARM_PORT:-8445}:8445"
-    environment:
-      ARM_ENTRA_ISSUER: "https://entra-emulator:8443/11111111-1111-1111-1111-111111111111/v2.0"
-      ARM_ENTRA_TLS_INSECURE: "true"
-      ARM_TENANT_ID: "11111111-1111-1111-1111-111111111111"
-      ARM_DATA_DIR: ""
-    healthcheck:
-      test: ["CMD", "/usr/local/bin/arm-emulator", "healthcheck"]
       interval: 5s
       timeout: 2s
       retries: 10
@@ -43,10 +28,8 @@ services:
     depends_on:
       entra-emulator:
         condition: service_healthy
-      arm-emulator:
-        condition: service_healthy
     ports:
-      - "8444:8444"
+      - "${KV_PORT:-8444}:8444"
     environment:
       # The authority the 401 challenge advertises, and the issuer/JWKS tokens
       # are validated against. 11111111-… is entra's seeded tenant.
@@ -55,12 +38,11 @@ services:
       # audience with no resource-app seed step.
       KV_ENTRA_ISSUER: "https://entra-emulator:8443/11111111-1111-1111-1111-111111111111/v2.0"
       KV_ENTRA_TLS_INSECURE: "true"
-      # Authorization comes from ARM: role assignments and the vault
-      # resource's own configuration (access policies, RBAC mode, purge
-      # protection, the soft-delete window). Drop these two to fall back to
-      # the /_emulator control surface instead.
-      KV_ARM_URL: "https://arm-emulator:8445"
-      KV_ARM_RESOURCE_GROUP: "emulator-rg"
+      # Authorization is this emulator's own /_emulator control surface. To
+      # have ARM govern it instead — role assignments and the vault resource's
+      # configuration, as in Azure — add the overlay:
+      #   docker compose -f docker-compose.yml -f docker-compose.arm.yml up
+      # or `make up ARM=1`.
       # The image bakes KV_DATA_DIR=/data for callers who mount a volume there.
       # This file mounts none, so leaving it set makes SQLite fail to open its
       # file and the container exits 1 with "unable to open database file (14)"

@@ -21,8 +21,20 @@
 # with the profile the compose file gates it behind:
 #
 #   make up PROFILE="--profile full"
+#
+# ARM=1 layers docker-compose.arm.yml on top, which adds arm-emulator and hands
+# authorization to it — role assignments and the vault resource, as in Azure —
+# instead of this emulator's own /_emulator control surface:
+#
+#   make up ARM=1
 PROFILE ?=
-COMPOSE  = docker compose $(PROFILE)
+ARM     ?=
+ifeq ($(ARM),1)
+  COMPOSE_FILES = -f docker-compose.yml -f docker-compose.arm.yml
+else
+  COMPOSE_FILES =
+endif
+COMPOSE  = docker compose $(COMPOSE_FILES) $(PROFILE)
 
 # Windows: force the recipes onto sh.exe. GNU Make on Windows falls back to
 # cmd.exe when it cannot find a shell, and cmd cannot run a single line of what
@@ -49,7 +61,7 @@ help: ## Show the available targets
 doctor: ## Check the toolchain and the docker context this Makefile needs
 	@sh scripts/doctor.sh
 
-up: ## Start the pair in the background (PROFILE="--profile full" adds fabric)
+up: ## Start the pair in the background (ARM=1 adds arm; PROFILE="--profile full" adds fabric)
 	$(COMPOSE) up -d
 
 down: ## Stop and remove containers
