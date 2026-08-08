@@ -32,15 +32,15 @@ WORK = Path(os.environ.get("TMPDIR", "/tmp")) / "kv-arm-chain-e2e"
 ENTRA_PORT = int(os.environ.get("ENTRA_PORT", "18743"))
 KV_PORT = int(os.environ.get("KV_PORT", "18744"))
 ARM_PORT = int(os.environ.get("ARM_PORT", "18745"))
-TENANT = "11111111-1111-1111-1111-111111111111"
-SP_CLIENT = "cccccccc-0000-0000-0000-000000000002"
+TENANT = "6f89cf12-978b-4d23-ac18-9ef0c127cf87"
+SP_CLIENT = "00d88624-f0d7-46f6-a641-6232c2608928"
 SP_SECRET = "daemon-app-secret"
 # entra-emulator's seeded user and the group she belongs to. A ROPC token for
 # Alice carries the groups claim once the app asks for it, which is how a
 # group-scoped role assignment reaches a real caller.
 ALICE_UPN = "alice@entraemulator.dev"
 ALICE_PASSWORD = "Password1!"
-ENG_GROUP = "bbbbbbbb-0000-0000-0000-000000000001"
+ENG_GROUP = "54a9d08c-889d-489e-b534-336fe19dbfce"
 # The daemon service principal's object id in entra-emulator's seed — the
 # principal the vault sees in the token's oid claim.
 ENTRA_VERSION = os.environ.get("ENTRA_VERSION", "v0.3.1")
@@ -51,7 +51,7 @@ E = f"https://localhost:{ENTRA_PORT}"
 KV = f"https://localhost:{KV_PORT}"
 ARM = f"https://localhost:{ARM_PORT}"
 ISSUER = f"{E}/{TENANT}/v2.0"
-SUB = "00000000-0000-0000-0000-000000000001"
+SUB = "6082bfda-63d0-46f4-8272-ae9195139feb"
 RG = "kv-rg"
 VAULT = "emulator"
 SCOPE = f"/subscriptions/{SUB}/resourceGroups/{RG}/providers/Microsoft.KeyVault/vaults/{VAULT}"

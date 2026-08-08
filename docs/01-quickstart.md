@@ -26,8 +26,8 @@ from azure.identity import DefaultAzureCredential, DefaultAzureCredentialOptions
 from azure.keyvault.secrets import SecretClient
 
 # entra-emulator's seeded confidential app (public dev values).
-os.environ["AZURE_TENANT_ID"] = "11111111-1111-1111-1111-111111111111"
-os.environ["AZURE_CLIENT_ID"] = "cccccccc-0000-0000-0000-000000000002"
+os.environ["AZURE_TENANT_ID"] = "6f89cf12-978b-4d23-ac18-9ef0c127cf87"
+os.environ["AZURE_CLIENT_ID"] = "00d88624-f0d7-46f6-a641-6232c2608928"
 os.environ["AZURE_CLIENT_SECRET"] = "daemon-app-secret"
 os.environ["AZURE_AUTHORITY_HOST"] = "https://localhost:8443"
 
@@ -58,8 +58,8 @@ works with no DNS setup. Mint a token, then use it:
 
 ```bash
 TOKEN=$(curl -sk -X POST \
-  "https://localhost:8443/11111111-1111-1111-1111-111111111111/oauth2/v2.0/token" \
-  -d "grant_type=client_credentials&client_id=cccccccc-0000-0000-0000-000000000002&client_secret=daemon-app-secret&scope=https://vault.azure.net/.default" \
+  "https://localhost:8443/6f89cf12-978b-4d23-ac18-9ef0c127cf87/oauth2/v2.0/token" \
+  -d "grant_type=client_credentials&client_id=00d88624-f0d7-46f6-a641-6232c2608928&client_secret=daemon-app-secret&scope=https://vault.azure.net/.default" \
   | python3 -c "import sys,json;print(json.load(sys.stdin)['access_token'])")
 
 curl -sk -X PUT "https://localhost:8444/secrets/db-password?api-version=7.5" \

@@ -22,7 +22,7 @@ esac
 PROJECT="${COMPOSE_PROJECT_NAME:-azure-keyvault-emulator}"
 VAULT="${VAULT_URL:-https://localhost:8444}"
 ENTRA="${ENTRA_URL:-https://localhost:8443}"
-TENANT="${TENANT_ID:-11111111-1111-1111-1111-111111111111}"
+TENANT="${TENANT_ID:-6f89cf12-978b-4d23-ac18-9ef0c127cf87}"
 RC=0
 
 say() { printf '%s\n' "$*"; }

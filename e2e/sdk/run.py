@@ -30,9 +30,9 @@ HERE = Path(__file__).resolve().parent
 WORK = Path(tempfile.gettempdir()) / "kv-sdk-e2e"
 ENTRA_PORT = int(os.environ.get("ENTRA_PORT", "18543"))
 KV_PORT = int(os.environ.get("KV_PORT", "18544"))
-TENANT = "11111111-1111-1111-1111-111111111111"
+TENANT = "6f89cf12-978b-4d23-ac18-9ef0c127cf87"
 # entra-emulator's seeded confidential daemon (public dev values).
-SP_CLIENT = "cccccccc-0000-0000-0000-000000000002"
+SP_CLIENT = "00d88624-f0d7-46f6-a641-6232c2608928"
 SP_SECRET = "daemon-app-secret"
 # entra >= v0.2.1 has the https://vault.azure.net carve-out.
 ENTRA_VERSION = os.environ.get("ENTRA_VERSION", "v0.2.1")

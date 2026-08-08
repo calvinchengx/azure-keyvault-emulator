@@ -14,7 +14,7 @@ both are set. Only the Entra issuer is required.
 | `--soft-delete-retention-days` | `KV_SOFT_DELETE_RETENTION_DAYS` | `90` | Soft-delete recovery window (7–90). Rejected outside that range. |
 | `--arm-url` | `KV_ARM_URL` | *(unset)* | arm-emulator's origin. When set, authorization comes from ARM (role assignments + vault access policies) instead of the `/_emulator` surface. |
 | `--arm-scope` | `KV_ARM_SCOPE` | derived | This vault's ARM resource id. Derived from the subscription, resource group and default vault name when unset. |
-| `--arm-subscription` | `KV_ARM_SUBSCRIPTION` | `00000000-…-0001` | Used to derive the scope. |
+| `--arm-subscription` | `KV_ARM_SUBSCRIPTION` | `6082bfda-…-9feb` | Used to derive the scope. |
 | `--arm-resource-group` | `KV_ARM_RESOURCE_GROUP` | `emulator-rg` | Used to derive the scope. |
 | — | `KV_ARM_POLL_SECONDS` | `5` | How often the ARM authorization feed is refreshed. |
 | `--purge-protection` | `KV_PURGE_PROTECTION` | off | Refuse purge (`403`) and report `recoveryLevel: Recoverable`, as a purge-protected vault does. Also toggleable at runtime: `POST /_emulator/purge-protection {"enabled": true}`. |

@@ -102,7 +102,7 @@ Azure keeps it:
 
 ```bash
 azure-keyvault-emulator -arm-url https://localhost:8445 \
-  -arm-subscription 00000000-0000-0000-0000-000000000001 \
+  -arm-subscription 6082bfda-63d0-46f4-8272-ae9195139feb \
   -arm-resource-group my-rg
 ```
 
