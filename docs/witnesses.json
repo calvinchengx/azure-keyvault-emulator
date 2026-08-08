@@ -380,7 +380,8 @@
       "go:TestCompileRBAC",
       "go:TestObjectScopedRBAC",
       "go:TestCompileFeed",
-      "go:TestARMSourceWiring"
+      "go:TestARMSourceWiring",
+      "ci:az-cli"
     ]
   },
   "access-policies-the-classic-vault-access-policy-document": {
@@ -389,7 +390,8 @@
     "witnesses": [
       "ci:arm-chain",
       "go:TestCompileAccessPolicies",
-      "go:TestAccessPolicyOps"
+      "go:TestAccessPolicyOps",
+      "ci:az-cli"
     ]
   },
   "group-membership-in-authorization": {
@@ -397,7 +399,8 @@
     "claim": "Group membership in authorization",
     "witnesses": [
       "ci:arm-chain",
-      "go:TestGroupPrincipalAuthorization"
+      "go:TestGroupPrincipalAuthorization",
+      "ci:az-cli"
     ]
   }
 }

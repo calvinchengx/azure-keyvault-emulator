@@ -121,6 +121,33 @@ Two behaviours worth knowing:
 - ARM being unreachable is not fatal: the last-known grants stay in force, and
   a vault that never reached ARM starts in the permissive default.
 
+#### Driving it with the real `az` CLI
+
+`az cloud register` exists so the CLI can target non-public ARM endpoints
+(sovereign clouds, Stack Hub). Register the family as one and every
+authorization command works unmodified:
+
+```bash
+az cloud register --name EmulatorCloud \
+  --endpoint-resource-manager https://localhost:8445 \
+  --endpoint-active-directory https://localhost:8443 \
+  --endpoint-active-directory-resource-id https://management.azure.com/ \
+  --suffix-keyvault-dns .vault.azure.net
+az cloud set --name EmulatorCloud
+az config set core.instance_discovery=false   # private cloud: skip MSAL's
+                                              # login.microsoftonline.com probe
+export REQUESTS_CA_BUNDLE=/path/to/emulator-certs.pem
+
+az login --service-principal -u <client-id> -p <secret> --tenant <tenant> --allow-no-subscriptions
+az group create --name my-rg --location westeurope
+az keyvault create --name emulator --resource-group my-rg --location westeurope
+az role assignment create --role "Key Vault Secrets User" \
+  --assignee-object-id <oid> --assignee-principal-type ServicePrincipal --scope <vault-id>
+```
+
+`e2e/az-cli/run.py` runs exactly this in CI and asserts the data plane flips
+between `403` and authorized after each command.
+
 **Group assignments resolve for members.** A role assigned to a group
 (`principalType: Group`) authorizes any caller whose token carries that group
 in its `groups` claim — the user is never named in the assignment, exactly as
