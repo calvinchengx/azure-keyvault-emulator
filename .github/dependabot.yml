@@ -1,0 +1,82 @@
+version: 2
+
+# Managed, grouped dependency updates.
+#
+# This repo has an unusual stake in staying current: the real Microsoft SDKs
+# ARE the parity witnesses. A stale azure-keyvault-keys is not just an old
+# dependency, it is a witness testifying about an old wire contract — so the
+# four SDK suites (Go, Python, JS, .NET) each get their own grouped PR, and
+# each such PR is a re-run of the witness suite against the newest clients
+# Microsoft ships. A red one is a real parity signal, not upgrade noise.
+updates:
+  # pnpm workspace: root + website + portal + e2e/sdk/js share one root
+  # pnpm-lock.yaml, so a single npm entry at / covers all four package.json
+  # files. The groups below split the resulting PRs by concern.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # Starlight peers a specific Astro major, so they must move as a pair —
+      # majors included, or a security fix landing only in the next Astro
+      # major would be held back indefinitely.
+      docs-site:
+        patterns: ['astro', '@astrojs/*', 'sharp']
+      portal:
+        patterns: ['svelte', '@sveltejs/*', 'vite']
+      # The JS witness suite: one PR moves every @azure/* client together, so
+      # CI proves the emulator against a self-consistent SDK set.
+      e2e-js:
+        patterns: ['@azure/*']
+
+  # Go: the emulator itself plus the azsdk witness suite in the same module.
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      azure-sdk:
+        patterns: ['github.com/Azure/azure-sdk-for-go/*']
+      go:
+        patterns: ['*']
+
+  # Python witness suite. requirements.txt is uv-compiled from an unpinned
+  # requirements.in, so Dependabot bumping the pins does not desync the two —
+  # the .in file names the clients, the .txt names the versions under test.
+  - package-ecosystem: pip
+    directory: /e2e/sdk/python
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      e2e-python:
+        patterns: ['*']
+
+  # .NET witness suite.
+  - package-ecosystem: nuget
+    directory: /e2e/sdk/dotnet
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      e2e-dotnet:
+        patterns: ['*']
+
+  # The published image's base layers.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+
+  # GitHub Actions.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      actions:
+        patterns: ['*']
