@@ -149,8 +149,13 @@ type armFeed struct {
 	// plane — so when ARM governs, they come from here rather than from this
 	// emulator's flags.
 	Vault struct {
-		Exists                  bool  `json:"exists"`
-		EnablePurgeProtection   *bool `json:"enablePurgeProtection"`
+		Exists                bool  `json:"exists"`
+		EnablePurgeProtection *bool `json:"enablePurgeProtection"`
+		// EnableSoftDelete is parsed but deliberately never applied. Azure has
+		// not allowed a vault to turn soft delete off since 2020 — the property
+		// survives only so older templates still deserialize — and this data
+		// plane likewise has no soft-delete-off mode. Honouring a `false` here
+		// would emulate a vault Azure will no longer create.
 		EnableSoftDelete        *bool `json:"enableSoftDelete"`
 		SoftDeleteRetentionDays *int  `json:"softDeleteRetentionInDays"`
 	} `json:"vault"`
