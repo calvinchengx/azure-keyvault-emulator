@@ -1,5 +1,5 @@
 # Build: pure Go (modernc sqlite, no CGO) → distroless static.
-FROM golang:1.25 AS build
+FROM golang:1.26 AS build
 ARG VERSION=dev
 WORKDIR /src
 COPY go.mod go.sum ./
