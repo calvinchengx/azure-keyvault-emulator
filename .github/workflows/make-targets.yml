@@ -1,13 +1,13 @@
 name: Make targets
 
-# The Makefile is the documented entry point — the README and
+# The Makefile is the documented entry point: the README and
 # docs/14-platform-setup.md both tell users to run `make doctor` / `make up` /
-# `make status` — so it needs the same cross-OS guarantee the Go tests have.
+# `make status`, so it needs the same cross-OS guarantee the Go tests have.
 # Nothing else in CI ran a single `make` command before this workflow existed.
 #
 # The failures this catches are platform-specific and invisible on Linux, which
 # is exactly why they survive:
-#   * a shell script checked out with CRLF fails at the shebang — `sh` reads the
+#   * a shell script checked out with CRLF fails at the shebang: `sh` reads the
 #     trailing \r as part of the interpreter path (.gitattributes pins eol=lf;
 #     `sh -n` below is what proves it stayed pinned).
 #   * on Windows `python3` is a Microsoft Store alias stub: on PATH, so every
@@ -15,7 +15,7 @@ name: Make targets
 #   * GNU Make falls back to cmd.exe when it cannot find a shell on PATH, and
 #     every recipe here is POSIX shell.
 #   * an unquoted or wrongly-named variable expands to nothing, or to whatever
-#     the caller happened to export — `make -n` catches that without running it.
+#     the caller happened to export; `make -n` catches that without running it.
 #
 # Docker coverage is Linux-only by necessity, not by choice: GitHub's macOS
 # runners have no Docker daemon, and the Windows runners support only Windows
@@ -54,7 +54,7 @@ jobs:
         if: runner.os == 'Windows'
         run: choco install make --no-progress -y
 
-      # Deliberately the runner's DEFAULT shell — PowerShell on Windows. This is
+      # Deliberately the runner's DEFAULT shell, PowerShell on Windows. This is
       # the one step that reproduces how a Windows user actually invokes make,
       # and it fails if Make cannot find sh.exe or the grep/awk the recipe uses.
       # One command per step so its exit code is the step's exit code: under
@@ -69,8 +69,8 @@ jobs:
           # Syntax-only, with the interpreter each script's shebang actually
           # declares: `sh -n` on a #!/usr/bin/env bash script would reject
           # legitimate bashisms, and `bash -n` on a #!/bin/sh script would let
-          # real ones through. This is what catches a CRLF checkout — dash and
-          # bash both reject a brace followed by a carriage return — and
+          # real ones through. This is what catches a CRLF checkout (dash and
+          # bash both reject a brace followed by a carriage return) and
           # any bashism creeping into an sh script.
           for f in scripts/*.sh; do
             case "$(head -1 "$f")" in
@@ -84,7 +84,7 @@ jobs:
         run: |
           set -euo pipefail
           # -n prints the recipe without running it, so this exercises variable
-          # expansion, quoting and the shell selection on every platform —
+          # expansion, quoting and the shell selection on every platform,
           # including the docker targets that cannot execute off Linux.
           for t in help doctor up down clean restart status ps logs test chain; do
             echo "=== make -n $t ==="
