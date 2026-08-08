@@ -43,7 +43,7 @@ jobs:
           WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
 
   image:
-    name: Docker image → GHCR
+    name: Docker image to GHCR
     needs: make-targets
     runs-on: ubuntu-latest
     steps:
