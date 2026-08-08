@@ -11,6 +11,9 @@ the simplest start:
 ```bash
 docker compose up                 # entra :8443 + keyvault :8444
 docker compose --profile full up  # adds fabric-emulator :9443 (the whole family)
+
+# Hand authorization to ARM (role assignments + the vault resource), as in Azure:
+docker compose -f docker-compose.yml -f docker-compose.arm.yml up   # adds arm :8445
 ```
 
 Or run the image directly against an existing entra:
