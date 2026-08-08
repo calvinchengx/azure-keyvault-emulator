@@ -140,7 +140,7 @@ jobs:
       - run: python e2e/sdk/run.py dotnet
 
   witnesses:
-    name: Every 🟢 parity claim names its witness
+    name: Every green parity claim names its witness
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
