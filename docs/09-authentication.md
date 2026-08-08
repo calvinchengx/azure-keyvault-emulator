@@ -94,6 +94,37 @@ Officer. Unknown permission or role names are refused (400), so a typo cannot
 silently widen access. `{"accessPolicies": []}` / `{"assignments": []}`
 restore full access.
 
+### Authorization from ARM (the real route)
+
+Point the emulator at [arm-emulator](https://github.com/calvinchengx/arm-emulator)
+and authorization stops being configured here at all — it comes from where
+Azure keeps it:
+
+```bash
+azure-keyvault-emulator -arm-url https://localhost:8445 \
+  -arm-subscription 00000000-0000-0000-0000-000000000001 \
+  -arm-resource-group my-rg
+```
+
+Now `az role assignment create --role "Key Vault Secrets User"` (or the real
+management SDKs) writes the assignment over ARM's wire, this emulator polls
+ARM's family feed, and the grant governs the data plane within a poll
+interval. Access policies set with `az keyvault set-policy` work the same way,
+and a vault with `enableRbacAuthorization` ignores them exactly as real Key
+Vault does.
+
+Two behaviours worth knowing:
+
+- **Under ARM governance, no assignment means no access** (`403`) — real
+  Azure's posture. Without `-arm-url`, an unconfigured emulator still grants
+  full access, which is the convenient local default.
+- ARM being unreachable is not fatal: the last-known grants stay in force, and
+  a vault that never reached ARM starts in the permissive default.
+
+The ops a role's dataActions map to are listed in
+`internal/vault/armfeed.go` — that mapping is this data plane's decision, as
+it is in Azure, where ARM stores the actions and the service interprets them.
+
 Assignments scope to a single object, as data-plane RBAC supports — add
 `"scope": "/keys/{name}"` (or `/secrets/…`, `/certificates/…`) to an
 assignment, or use `{type}/{op}:{object}` entries in the raw allowlist.

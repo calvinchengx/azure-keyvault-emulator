@@ -371,5 +371,25 @@
       "go:TestKeySoftDeleteHandlers",
       "go:TestCertSoftDeleteHandlers"
     ]
+  },
+  "rbac-data-plane-roles-key-vault-secrets-user": {
+    "section": "Authorization",
+    "claim": "RBAC data-plane roles (Key Vault Secrets User, \u2026)",
+    "witnesses": [
+      "ci:arm-chain",
+      "go:TestCompileRBAC",
+      "go:TestObjectScopedRBAC",
+      "go:TestCompileFeed",
+      "go:TestARMSourceWiring"
+    ]
+  },
+  "access-policies-the-classic-vault-access-policy-document": {
+    "section": "Authorization",
+    "claim": "Access policies (the classic vault access-policy document)",
+    "witnesses": [
+      "ci:arm-chain",
+      "go:TestCompileAccessPolicies",
+      "go:TestAccessPolicyOps"
+    ]
   }
 }

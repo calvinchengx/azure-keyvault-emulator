@@ -39,6 +39,11 @@ type Service struct {
 	// absent from a non-empty map (or with an empty list) is denied; an
 	// empty map means full access for everyone (the default dev posture).
 	perms map[string][]string
+	// permsAuthoritative distinguishes "nobody configured authorization"
+	// (empty map = full access, the dev posture) from "authorization IS
+	// configured and grants nothing" — which is what an ARM-governed vault
+	// with no role assignment means, and must deny.
+	permsAuthoritative bool
 	// purgeProtection mirrors real Key Vault's vault property: while
 	// enabled, purge is refused (403) and recoveryLevel reports
 	// "Recoverable". Initialized from config, toggleable at runtime via
@@ -141,6 +146,24 @@ func (s *Service) SetPermissions(perms map[string][]string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.perms = perms
+	s.permsAuthoritative = false
+}
+
+// SetManagedPermissions replaces the allowlist from an authoritative source
+// (the ARM feed). Unlike SetPermissions, an empty map here means "nothing is
+// granted" rather than "not configured" — real Key Vault denies a principal
+// with no role assignment and no access policy.
+func (s *Service) SetManagedPermissions(perms map[string][]string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.perms = perms
+	s.permsAuthoritative = true
+}
+
+// Allowed reports whether the principal may perform op on the named object —
+// the exported form of the gate, for wiring checks.
+func (s *Service) Allowed(principalID, op, object string) bool {
+	return s.allowed(principalID, op, object)
 }
 
 // allowed reports whether the principal may perform op on the named object.
@@ -152,7 +175,7 @@ func (s *Service) SetPermissions(perms map[string][]string) {
 func (s *Service) allowed(principalID, op, object string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if len(s.perms) == 0 {
+	if len(s.perms) == 0 && !s.permsAuthoritative {
 		return true
 	}
 	for _, got := range s.perms[principalID] {
