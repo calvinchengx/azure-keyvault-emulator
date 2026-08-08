@@ -44,6 +44,8 @@ ENG_GROUP = "bbbbbbbb-0000-0000-0000-000000000001"
 # The daemon service principal's object id in entra-emulator's seed — the
 # principal the vault sees in the token's oid claim.
 ENTRA_VERSION = os.environ.get("ENTRA_VERSION", "v0.3.1")
+# /metadata/endpoints and the vault provider need arm >= v0.1.1.
+ARM_VERSION = os.environ.get("ARM_VERSION", "v0.1.1")
 
 E = f"https://localhost:{ENTRA_PORT}"
 KV = f"https://localhost:{KV_PORT}"
@@ -315,7 +317,7 @@ def main():
                        check=True, env={**os.environ, "GOTOOLCHAIN": "auto"})
     else:
         arm_bin = go_install("arm-emulator",
-                             "github.com/calvinchengx/arm-emulator/cmd/arm-emulator@latest")
+                             f"github.com/calvinchengx/arm-emulator/cmd/arm-emulator@{ARM_VERSION}")
 
     print(f"==> starting entra-emulator on :{ENTRA_PORT}")
     start("entra", [str(entra_bin)], {
