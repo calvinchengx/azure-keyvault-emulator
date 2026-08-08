@@ -48,6 +48,10 @@ func run(args []string) error {
 	fs.StringVar(&cfg.DefaultVault, "default-vault", cfg.DefaultVault, "vault served on non-vault hosts")
 	fs.IntVar(&cfg.SoftDeleteRetentionDays, "soft-delete-retention-days", cfg.SoftDeleteRetentionDays, "soft-delete recovery window (7-90)")
 	fs.BoolVar(&cfg.PurgeProtection, "purge-protection", cfg.PurgeProtection, "refuse purge; recoveryLevel reports Recoverable")
+	fs.StringVar(&cfg.ARMURL, "arm-url", cfg.ARMURL, "arm-emulator origin; when set, authorization comes from ARM")
+	fs.StringVar(&cfg.ARMScope, "arm-scope", cfg.ARMScope, "this vault's ARM resource id (derived when empty)")
+	fs.StringVar(&cfg.ARMSubscription, "arm-subscription", cfg.ARMSubscription, "subscription id used to derive the ARM scope")
+	fs.StringVar(&cfg.ARMResourceGroup, "arm-resource-group", cfg.ARMResourceGroup, "resource group used to derive the ARM scope")
 	fs.BoolVar(&cfg.DisableTLS, "disable-tls", cfg.DisableTLS, "serve plain HTTP")
 	if err := fs.Parse(args); err != nil {
 		return err

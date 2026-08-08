@@ -38,6 +38,20 @@ type Config struct {
 	DefaultVault string
 	// SoftDeleteRetentionDays is the recovery window (7–90, default 90).
 	SoftDeleteRetentionDays int
+	// ARMURL is arm-emulator's origin. When set, authorization comes from
+	// ARM — role assignments and vault access policies written over ARM's
+	// real wire — instead of this emulator's own control surface.
+	ARMURL string
+	// ARMScope is this vault's ARM resource id; derived from ARMSubscription,
+	// ARMResourceGroup and the default vault name when unset.
+	ARMScope string
+	// ARMSubscription / ARMResourceGroup build the scope when ARMScope is
+	// unset.
+	ARMSubscription  string
+	ARMResourceGroup string
+	// ARMPollSeconds is how often the feed is refreshed (default 5).
+	ARMPollSeconds int
+
 	// PurgeProtection mirrors real Key Vault's vault property: purge is
 	// refused and recoveryLevel reports "Recoverable" while enabled. Also
 	// toggleable at runtime via POST /_emulator/purge-protection.
@@ -63,6 +77,11 @@ func FromEnvPartial() *Config {
 		DefaultVault:            envOr("KV_DEFAULT_VAULT", "emulator"),
 		SoftDeleteRetentionDays: retention,
 		PurgeProtection:         boolEnv("KV_PURGE_PROTECTION"),
+		ARMURL:                  os.Getenv("KV_ARM_URL"),
+		ARMScope:                os.Getenv("KV_ARM_SCOPE"),
+		ARMSubscription:         envOr("KV_ARM_SUBSCRIPTION", "00000000-0000-0000-0000-000000000001"),
+		ARMResourceGroup:        envOr("KV_ARM_RESOURCE_GROUP", "emulator-rg"),
+		ARMPollSeconds:          intEnv("KV_ARM_POLL_SECONDS", 5),
 		DisableTLS:              boolEnv("KV_DISABLE_TLS"),
 	}
 }
@@ -122,6 +141,22 @@ func (c *Config) Finish() error {
 		return fmt.Errorf("KV_SOFT_DELETE_RETENTION_DAYS must be 7-90 (got %d)", c.SoftDeleteRetentionDays)
 	}
 	return nil
+}
+
+// Scope returns the ARM resource id this vault is authorized at.
+func (c *Config) Scope() string {
+	if c.ARMScope != "" {
+		return c.ARMScope
+	}
+	return fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.KeyVault/vaults/%s",
+		c.ARMSubscription, c.ARMResourceGroup, c.DefaultVault)
+}
+
+func intEnv(key string, def int) int {
+	if v, err := strconv.Atoi(os.Getenv(key)); err == nil && v > 0 {
+		return v
+	}
+	return def
 }
 
 func envOr(key, def string) string {

@@ -114,8 +114,9 @@ therefore means "absent", not "honestly refused".
 | Key Vault feature | Emulator | Type |
 |---|---|---|
 | Data-plane authorization | A per-principal operation allowlist (`POST /_emulator/permissions`, ops named `{type}/{op}`, optional `:{object}` scope, `*` wildcard); empty = full access | 🟡 Emulated |
-| RBAC data-plane roles (Key Vault Secrets User, …) | The real built-in roles by name (`POST /_emulator/rbac`), expanded to their documented data-action sets, with **object-level scopes** (`scope: "/keys/{name}"`) as data-plane RBAC supports — assignment via the control surface, not ARM | 🟡 Emulated |
-| Access policies (the classic vault access-policy document) | The real document shape (`objectId` + `permissions:{secrets,keys,certificates}`, incl. `all`) accepted at `POST /_emulator/access-policy` and enforced; unknown permission names refused | 🟡 Emulated |
+| RBAC data-plane roles (Key Vault Secrets User, …) | Real when [arm-emulator](https://github.com/calvinchengx/arm-emulator) is wired in (`-arm-url`): `az role assignment create` writes the assignment over **ARM's real wire** and this data plane enforces it, no-assignment-means-no-access included. Standalone, the same roles assign over `POST /_emulator/rbac` with object-level scopes | 🟢 Real |
+| Access policies (the classic vault access-policy document) | Real via ARM the same way (`az keyvault set-policy`), including a vault's `enableRbacAuthorization` making them ignored. Standalone, the real document shape is accepted at `POST /_emulator/access-policy` | 🟢 Real |
+| Role/policy **assignment** without ARM | The `/_emulator` control surface stands in — real documents and enforcement, but not ARM's wire | 🟡 Emulated |
 
 ## Emulator-only (no Key Vault equivalent — these exist for testing)
 

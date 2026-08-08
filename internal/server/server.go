@@ -4,8 +4,10 @@
 package server
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/calvinchengx/azure-keyvault-emulator/internal/auth"
 	"github.com/calvinchengx/azure-keyvault-emulator/internal/clock"
@@ -20,7 +22,10 @@ type Server struct {
 	Store *store.Store
 	Clock *clock.Clock
 	Vault *vault.Service
-	mux   *http.ServeMux
+	// ARM polls arm-emulator's authorization feed when configured.
+	ARM     *vault.ARMSource
+	armStop chan struct{}
+	mux     *http.ServeMux
 }
 
 // New wires the emulator. jwksClient overrides the JWKS-fetching HTTP client
@@ -35,6 +40,29 @@ func New(cfg *config.Config, jwksClient *http.Client) (*Server, error) {
 	kv := vault.New(cfg, st, v)
 
 	s := &Server{Cfg: cfg, Store: st, Clock: ck, Vault: kv, mux: http.NewServeMux()}
+	// When arm-emulator is configured, authorization comes from ARM: role
+	// assignments and access policies written there compile onto the same
+	// allowlist the control surface writes.
+	if cfg.ARMURL != "" {
+		client := jwksClient // in-process tests share one transport
+		if client == nil {
+			// The same self-signed posture as the JWKS fetch: sibling
+			// emulators serve local certs, so -entra-tls-insecure covers
+			// talking to ARM too.
+			tr := http.DefaultTransport.(*http.Transport).Clone()
+			if cfg.EntraTLSInsecure {
+				tr.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+			}
+			client = &http.Client{Timeout: 5 * time.Second, Transport: tr}
+		}
+		s.ARM = vault.NewARMSource(kv, cfg.ARMURL, cfg.Scope(), client,
+			time.Duration(cfg.ARMPollSeconds)*time.Second)
+		// Fetch once up front so the first request is already governed by ARM;
+		// a failure here is not fatal (ARM may still be starting).
+		_ = s.ARM.Refresh()
+		s.armStop = make(chan struct{})
+		go s.ARM.Run(s.armStop)
+	}
 	s.mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "now": ck.Now()})
 	})
@@ -48,7 +76,13 @@ func New(cfg *config.Config, jwksClient *http.Client) (*Server, error) {
 func (s *Server) Handler() http.Handler { return s.mux }
 
 // Close releases resources.
-func (s *Server) Close() error { return s.Store.Close() }
+func (s *Server) Close() error {
+	if s.armStop != nil {
+		close(s.armStop)
+		s.armStop = nil
+	}
+	return s.Store.Close()
+}
 
 func (s *Server) registerControl() {
 	s.mux.HandleFunc("GET /_emulator/clock", func(w http.ResponseWriter, r *http.Request) {

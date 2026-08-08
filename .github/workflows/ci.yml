@@ -71,6 +71,23 @@ jobs:
       # processes, all on the production trust relationships.
       - run: python3 e2e/chain/run.py
 
+  arm-chain:
+    name: ARM role assignment governs the data plane
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.25'
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      # Three real processes: entra mints an ARM token, arm-emulator takes a
+      # role assignment over ARM's real wire, and this emulator's data plane
+      # flips from 403 to authorized because of it — then back on revocation,
+      # and again via a classic access policy.
+      - run: python e2e/arm-chain/run.py
+
   python-sdk:
     name: Real Python SDK (azure-keyvault-*) against the emulator pair
     strategy:

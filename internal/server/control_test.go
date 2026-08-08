@@ -125,3 +125,83 @@ func TestControlSurface(t *testing.T) {
 		t.Fatalf("rbac reset = %d", w.Code)
 	}
 }
+
+// TestARMSourceWiring: with ARMURL configured the server builds a feed
+// consumer, applies it before serving, and stops its poller on Close.
+func TestARMSourceWiring(t *testing.T) {
+	const scope = "/subscriptions/s/resourceGroups/g/providers/Microsoft.KeyVault/vaults/emulator"
+	hits := make(chan struct{}, 16)
+	arm := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case hits <- struct{}{}:
+		default:
+		}
+		if got := r.URL.Query().Get("scope"); got != scope {
+			t.Errorf("feed scope = %q", got)
+		}
+		_, _ = w.Write([]byte(`{"scope":"` + scope + `","generated":1,"assignments":[
+			{"principalId":"sp-1","roleName":"Key Vault Secrets User",
+			 "dataActions":["Microsoft.KeyVault/vaults/secrets/getSecret/action"]}],
+			"accessPolicies":[],"enableRbacAuthorization":true}`))
+	}))
+	defer arm.Close()
+
+	cfg := &config.Config{
+		EntraIssuer: "https://e/t/v2.0", DefaultVault: "emulator",
+		SoftDeleteRetentionDays: 90,
+		ARMURL:                  arm.URL, ARMScope: scope, ARMPollSeconds: 1,
+	}
+	if err := cfg.Finish(); err != nil {
+		t.Fatal(err)
+	}
+	s, err := New(cfg, arm.Client())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.ARM == nil {
+		t.Fatal("ARM source not wired")
+	}
+	// The startup refresh already applied the feed.
+	select {
+	case <-hits:
+	default:
+		t.Fatal("no feed request at startup")
+	}
+	if !s.Vault.Allowed("sp-1", "secrets/get", "") || s.Vault.Allowed("sp-1", "secrets/set", "") {
+		t.Fatal("ARM feed did not govern the served vault")
+	}
+	// A principal with no assignment is denied, not waved through.
+	if s.Vault.Allowed("nobody", "secrets/get", "") {
+		t.Fatal("an unassigned principal was allowed under ARM governance")
+	}
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	// Close is idempotent (the poller channel is only closed once).
+	if err := s.Close(); err != nil {
+		t.Fatalf("second Close: %v", err)
+	}
+}
+
+// TestARMSourceUnreachable: a server configured against a dead ARM still
+// starts — the emulator must not be unusable because a sibling is down.
+func TestARMSourceUnreachable(t *testing.T) {
+	cfg := &config.Config{
+		EntraIssuer: "https://e/t/v2.0", DefaultVault: "emulator",
+		SoftDeleteRetentionDays: 90,
+		ARMURL:                  "https://127.0.0.1:1", ARMPollSeconds: 1,
+		ARMSubscription: "s", ARMResourceGroup: "g",
+	}
+	if err := cfg.Finish(); err != nil {
+		t.Fatal(err)
+	}
+	s, err := New(cfg, nil)
+	if err != nil {
+		t.Fatalf("server.New with a dead ARM: %v", err)
+	}
+	defer s.Close()
+	// Authorization was never applied, so the un-configured posture holds.
+	if !s.Vault.Allowed("anyone", "secrets/get", "") {
+		t.Fatal("a failed startup refresh left the vault locked down")
+	}
+}
