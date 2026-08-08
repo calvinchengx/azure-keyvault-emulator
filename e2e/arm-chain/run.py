@@ -35,9 +35,15 @@ ARM_PORT = int(os.environ.get("ARM_PORT", "18745"))
 TENANT = "11111111-1111-1111-1111-111111111111"
 SP_CLIENT = "cccccccc-0000-0000-0000-000000000002"
 SP_SECRET = "daemon-app-secret"
+# entra-emulator's seeded user and the group she belongs to. A ROPC token for
+# Alice carries the groups claim once the app asks for it, which is how a
+# group-scoped role assignment reaches a real caller.
+ALICE_UPN = "alice@entraemulator.dev"
+ALICE_PASSWORD = "Password1!"
+ENG_GROUP = "bbbbbbbb-0000-0000-0000-000000000001"
 # The daemon service principal's object id in entra-emulator's seed — the
 # principal the vault sees in the token's oid claim.
-ENTRA_VERSION = os.environ.get("ENTRA_VERSION", "v0.2.1")
+ENTRA_VERSION = os.environ.get("ENTRA_VERSION", "v0.3.1")
 
 E = f"https://localhost:{ENTRA_PORT}"
 KV = f"https://localhost:{KV_PORT}"
@@ -86,12 +92,33 @@ def token(scope):
     return json.loads(raw)["access_token"]
 
 
-def principal_of(jwt):
-    """The oid the vault will see — read from the token the SP just got."""
+def ropc_token(username, password, scope):
+    """A user token via resource-owner password credentials."""
+    body = urllib.parse.urlencode({
+        "grant_type": "password", "client_id": SP_CLIENT, "client_secret": SP_SECRET,
+        "username": username, "password": password, "scope": scope,
+    })
+    status, raw = http("POST", f"{E}/{TENANT}/oauth2/v2.0/token",
+                       {"Content-Type": "application/x-www-form-urlencoded"}, body)
+    if status != 200:
+        sys.exit(f"FAIL: ROPC token for {username} = {status} {raw[:300]}")
+    return json.loads(raw)["access_token"]
+
+
+def claims_of(jwt):
     payload = jwt.split(".")[1]
     payload += "=" * (-len(payload) % 4)
     import base64
-    claims = json.loads(base64.urlsafe_b64decode(payload))
+    return json.loads(base64.urlsafe_b64decode(payload))
+
+
+def groups_of(jwt):
+    return claims_of(jwt).get("groups", [])
+
+
+def principal_of(jwt):
+    """The oid the vault will see — read from the token the SP just got."""
+    claims = claims_of(jwt)
     return claims.get("oid") or claims.get("sub")
 
 
@@ -212,7 +239,52 @@ def driver():
     wait_for(lambda: secret_read_status(kv_tok) == 404, "the access policy to reach the vault")
     print("   authorized via access policy")
 
-    print("\nARM CHAIN E2E: PASS — ARM assignment -> Key Vault data-plane enforcement")
+    print("-- 8. a GROUP assignment reaches a member user")
+    # Put the vault back in RBAC mode so only assignments count.
+    status, raw = http("PUT", f"{ARM}{SCOPE}?api-version=2024-11-01", bearer(arm_tok),
+                       json.dumps({"location": "westeurope",
+                                   "properties": {"tenantId": TENANT, "enableRbacAuthorization": True,
+                                                  "accessPolicies": []}}))
+    if status != 200:
+        sys.exit(f"FAIL: back to RBAC mode = {status} {raw[:300]}")
+
+    # Ask the app for group membership claims, as an app registration does in
+    # real Entra; then Alice's token carries her groups.
+    status, raw = http("PATCH", f"{E}/admin/api/apps/{SP_CLIENT}",
+                       {"Content-Type": "application/json"},
+                       '{"groupMembershipClaims":"SecurityGroup"}')
+    if status != 200:
+        sys.exit(f"FAIL: enable group claims = {status} {raw[:300]}")
+
+    # Alice signs in with her password; her token carries the groups claim.
+    alice_tok = ropc_token(ALICE_UPN, ALICE_PASSWORD, "https://vault.azure.net/.default")
+    groups = groups_of(alice_tok)
+    if ENG_GROUP not in groups:
+        sys.exit(f"FAIL: Alice's token carries no Engineering group: {groups}")
+    print(f"   Alice's token carries groups: {groups}")
+
+    # No assignment for Alice or her group yet.
+    wait_for(lambda: secret_read_status(alice_tok) == 403, "Alice to start unauthorized")
+
+    group_assignment = "7a0620ff-9c97-e122-c53e-11d15fd075aa"
+    status, raw = http("PUT",
+                       f"{ARM}{SCOPE}/providers/Microsoft.Authorization/roleAssignments/{group_assignment}?api-version={ARM_API}",
+                       bearer(arm_tok),
+                       json.dumps({"properties": {"roleDefinitionId": ROLE_ID,
+                                                  "principalId": ENG_GROUP,
+                                                  "principalType": "Group"}}))
+    if status != 201:
+        sys.exit(f"FAIL: create group assignment = {status} {raw[:300]}")
+    # Alice was never named — the grant reaches her through the group.
+    wait_for(lambda: secret_read_status(alice_tok) == 404, "the group grant to reach a member")
+    print("   Alice is authorized through her group, never named in the assignment")
+
+    # The service principal is not in the group, so it stays refused.
+    if secret_read_status(kv_tok) != 403:
+        sys.exit("FAIL: a non-member was authorized by the group assignment")
+    print("   a non-member is still refused")
+
+    print("\nARM CHAIN E2E: PASS — ARM assignment (user, group and access policy) -> Key Vault enforcement")
 
 
 def main():
@@ -220,9 +292,19 @@ def main():
         shutil.rmtree(WORK)
     (WORK / "kvdata").mkdir(parents=True)
 
-    print("==> installing entra-emulator (pinned) + building arm + keyvault")
-    entra_bin = go_install("entra-emulator",
-                           f"github.com/calvinchengx/entra-emulator/cmd/entra-emulator@{ENTRA_VERSION}")
+    print("==> building/installing entra + arm + keyvault")
+    # The delegated Azure-resource carve-out (a user token for
+    # https://vault.azure.net) needs entra >= v0.3.1. A sibling checkout wins
+    # so the family can be developed together; otherwise the pinned release.
+    entra_repo = Path(os.environ.get("ENTRA_EMULATOR_REPO", REPO.parent / "entra-emulator"))
+    entra_bin = WORK / ("entra-emulator" + EXE)
+    if (entra_repo / "go.mod").exists():
+        subprocess.run(["go", "build", "-C", str(entra_repo), "-o", str(entra_bin),
+                        "./cmd/entra-emulator"], check=True,
+                       env={**os.environ, "GOTOOLCHAIN": "auto"})
+    else:
+        entra_bin = go_install("entra-emulator",
+                               f"github.com/calvinchengx/entra-emulator/cmd/entra-emulator@{ENTRA_VERSION}")
     kv_bin = WORK / ("azure-keyvault-emulator" + EXE)
     subprocess.run(["go", "build", "-C", str(REPO), "-o", str(kv_bin), "./cmd/azure-keyvault-emulator"],
                    check=True, env={**os.environ, "GOTOOLCHAIN": "auto"})

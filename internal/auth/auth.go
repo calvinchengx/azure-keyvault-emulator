@@ -32,6 +32,12 @@ type Principal struct {
 	ID   string // oid claim (falls back to sub)
 	Type string // "User" | "ServicePrincipal"
 	App  string // appid claim when present
+	// Groups is the token's groups claim — the object ids of the groups the
+	// caller belongs to. Real Entra emits it when the app's
+	// groupMembershipClaims (or an optional claim) asks for it; RBAC binds
+	// assignments to groups as often as to principals, so authorization
+	// matches against these too.
+	Groups []string
 }
 
 // issuerSet is one trusted issuer with its JWKS cache.
@@ -129,14 +135,15 @@ func (v *Validator) Validate(token string) (*Principal, error) {
 		return nil, fmt.Errorf("%w: payload encoding", ErrBadToken)
 	}
 	var claims struct {
-		Iss   string          `json:"iss"`
-		Aud   json.RawMessage `json:"aud"`
-		Exp   int64           `json:"exp"`
-		Nbf   int64           `json:"nbf"`
-		Oid   string          `json:"oid"`
-		Sub   string          `json:"sub"`
-		AppID string          `json:"appid"`
-		IdTyp string          `json:"idtyp"`
+		Iss    string          `json:"iss"`
+		Aud    json.RawMessage `json:"aud"`
+		Exp    int64           `json:"exp"`
+		Nbf    int64           `json:"nbf"`
+		Oid    string          `json:"oid"`
+		Groups []string        `json:"groups"`
+		Sub    string          `json:"sub"`
+		AppID  string          `json:"appid"`
+		IdTyp  string          `json:"idtyp"`
 	}
 	if err := json.Unmarshal(payloadB, &claims); err != nil {
 		return nil, fmt.Errorf("%w: claims", ErrBadToken)
@@ -156,7 +163,7 @@ func (v *Validator) Validate(token string) (*Principal, error) {
 		return nil, fmt.Errorf("%w: not yet valid", ErrBadToken)
 	}
 
-	p := &Principal{ID: claims.Oid, App: claims.AppID, Type: "User"}
+	p := &Principal{ID: claims.Oid, App: claims.AppID, Type: "User", Groups: claims.Groups}
 	if p.ID == "" {
 		p.ID = claims.Sub
 	}
