@@ -43,7 +43,7 @@ ALICE_PASSWORD = "Password1!"
 ENG_GROUP = "54a9d08c-889d-489e-b534-336fe19dbfce"
 # The daemon service principal's object id in entra-emulator's seed — the
 # principal the vault sees in the token's oid claim.
-ENTRA_VERSION = os.environ.get("ENTRA_VERSION", "v0.3.1")
+ENTRA_VERSION = os.environ.get("ENTRA_VERSION", "v0.4.0")
 # /metadata/endpoints and the vault provider need arm >= v0.1.1.
 ARM_VERSION = os.environ.get("ARM_VERSION", "v0.1.1")
 
