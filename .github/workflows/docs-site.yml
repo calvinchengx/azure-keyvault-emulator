@@ -10,7 +10,7 @@ on:
       - 'pnpm-workspace.yaml'
       - 'package.json'
       - '.github/workflows/docs-site.yml'
-  # Pull requests build the site as a check — the docs generator shells out to
+  # Pull requests build the site as a check: the docs generator shells out to
   # git for the parity versions, so a PR that breaks it should fail here rather
   # than after merge. Build only: the deploy job is skipped below.
   pull_request:
