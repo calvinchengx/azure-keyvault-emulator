@@ -20,7 +20,7 @@ Or run the image directly against an existing entra:
 
 ```bash
 docker run --rm -p 8444:8444 \
-  -e KV_ENTRA_ISSUER="https://entra:8443/11111111-1111-1111-1111-111111111111/v2.0" \
+  -e KV_ENTRA_ISSUER="https://entra:8443/6f89cf12-978b-4d23-ac18-9ef0c127cf87/v2.0" \
   -e KV_ENTRA_TLS_INSECURE=true \
   ghcr.io/calvinchengx/azure-keyvault-emulator:latest
 ```
@@ -59,7 +59,7 @@ The one required setting is the Entra issuer to validate tokens against
 
 ```bash
 azure-keyvault-emulator \
-  --entra-issuer "https://localhost:8443/11111111-1111-1111-1111-111111111111/v2.0" \
+  --entra-issuer "https://localhost:8443/6f89cf12-978b-4d23-ac18-9ef0c127cf87/v2.0" \
   --entra-tls-insecure
 ```
 

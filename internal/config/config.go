@@ -79,7 +79,7 @@ func FromEnvPartial() *Config {
 		PurgeProtection:         boolEnv("KV_PURGE_PROTECTION"),
 		ARMURL:                  os.Getenv("KV_ARM_URL"),
 		ARMScope:                os.Getenv("KV_ARM_SCOPE"),
-		ARMSubscription:         envOr("KV_ARM_SUBSCRIPTION", "00000000-0000-0000-0000-000000000001"),
+		ARMSubscription:         envOr("KV_ARM_SUBSCRIPTION", "6082bfda-63d0-46f4-8272-ae9195139feb"),
 		ARMResourceGroup:        envOr("KV_ARM_RESOURCE_GROUP", "emulator-rg"),
 		ARMPollSeconds:          intEnv("KV_ARM_POLL_SECONDS", 5),
 		DisableTLS:              boolEnv("KV_DISABLE_TLS"),

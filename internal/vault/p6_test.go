@@ -433,7 +433,7 @@ func TestObjectScopedRBAC(t *testing.T) {
 
 func TestGroupPrincipalAuthorization(t *testing.T) {
 	s, _ := newService(t, "")
-	const groupID = "bbbbbbbb-0000-0000-0000-000000000001"
+	const groupID = "54a9d08c-889d-489e-b534-336fe19dbfce"
 	// The grant is bound to a GROUP, not to any user.
 	s.SetManagedPermissions(map[string][]string{groupID: {"secrets/get"}})
 
