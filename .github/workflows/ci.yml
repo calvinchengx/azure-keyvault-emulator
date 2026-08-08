@@ -88,6 +88,25 @@ jobs:
       # and again via a classic access policy.
       - run: python e2e/arm-chain/run.py
 
+  az-cli:
+    name: The real az CLI drives the family as a registered cloud
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.25'
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      # GitHub-hosted runners ship the Azure CLI. The harness registers the
+      # emulator family with `az cloud register` (the sovereign-cloud path),
+      # logs in against entra-emulator, then creates a resource group, a
+      # vault, a role assignment and an access policy — and asserts the vault
+      # data plane flips between 403 and authorized because of them.
+      - run: az version
+      - run: python e2e/az-cli/run.py
+
   python-sdk:
     name: Real Python SDK (azure-keyvault-*) against the emulator pair
     strategy:
