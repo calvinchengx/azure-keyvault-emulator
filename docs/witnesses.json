@@ -265,7 +265,8 @@
     "section": "Soft-delete & recovery",
     "claim": "Purge protection / non-purgeable `recoveryLevel`",
     "witnesses": [
-      "go:TestPurgeProtection"
+      "go:TestPurgeProtection",
+      "go:TestARMSourceAppliesVaultConfig"
     ]
   },
   "api-version-validation": {
@@ -369,7 +370,8 @@
     "claim": "Retention window expiry",
     "witnesses": [
       "go:TestKeySoftDeleteHandlers",
-      "go:TestCertSoftDeleteHandlers"
+      "go:TestCertSoftDeleteHandlers",
+      "go:TestARMSourceAppliesVaultConfig"
     ]
   },
   "rbac-data-plane-roles-key-vault-secrets-user": {

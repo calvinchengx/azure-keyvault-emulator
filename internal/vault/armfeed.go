@@ -144,6 +144,16 @@ type armFeed struct {
 		} `json:"permissions"`
 	} `json:"accessPolicies"`
 	EnableRbacAuthorization bool `json:"enableRbacAuthorization"`
+	// Vault is the ARM resource's own configuration. In Azure these are
+	// properties of the vault resource, not of the process serving the data
+	// plane — so when ARM governs, they come from here rather than from this
+	// emulator's flags.
+	Vault struct {
+		Exists                  bool  `json:"exists"`
+		EnablePurgeProtection   *bool `json:"enablePurgeProtection"`
+		EnableSoftDelete        *bool `json:"enableSoftDelete"`
+		SoftDeleteRetentionDays *int  `json:"softDeleteRetentionInDays"`
+	} `json:"vault"`
 }
 
 // compileFeed turns a feed document into the per-principal allowlist. A vault
@@ -244,6 +254,17 @@ func (a *ARMSource) Refresh() error {
 		return fmt.Errorf("parse ARM authorization feed: %w", err)
 	}
 	a.svc.SetManagedPermissions(compileFeed(&f))
+	// The vault resource also carries its own configuration. Only apply it
+	// when the resource actually exists: an absent vault must not silently
+	// reconfigure a running emulator.
+	if f.Vault.Exists {
+		if f.Vault.EnablePurgeProtection != nil {
+			a.svc.SetPurgeProtection(*f.Vault.EnablePurgeProtection)
+		}
+		if d := f.Vault.SoftDeleteRetentionDays; d != nil && *d >= 7 && *d <= 90 {
+			a.svc.SetSoftDeleteRetentionDays(*d)
+		}
+	}
 	a.mu.Lock()
 	a.last = f.Generated
 	a.mu.Unlock()

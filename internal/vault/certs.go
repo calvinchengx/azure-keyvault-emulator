@@ -185,7 +185,7 @@ func (s *Service) certAttrs(v *store.CertVersion) attributes {
 	return attributes{
 		Enabled: &v.Enabled, NBF: v.NBF, Exp: v.Exp,
 		Created: v.CreatedAt, Updated: v.UpdatedAt,
-		RecoveryLevel: s.recoveryLevel(), RecoverableDays: s.Cfg.SoftDeleteRetentionDays,
+		RecoveryLevel: s.recoveryLevel(), RecoverableDays: s.retention(),
 	}
 }
 
@@ -662,10 +662,10 @@ func (s *Service) listCertificateVersions(w http.ResponseWriter, r *http.Request
 // carries all three. Absence is fine (a cert-only import materializes
 // neither); real storage errors are not.
 func (s *Service) cascadeDelete(vault, name string) error {
-	if _, err := s.Store.DeleteKey(vault, name, s.Cfg.SoftDeleteRetentionDays); err != nil && !errors.Is(err, store.ErrNotFound) {
+	if _, err := s.Store.DeleteKey(vault, name, s.retention()); err != nil && !errors.Is(err, store.ErrNotFound) {
 		return err
 	}
-	if _, err := s.Store.DeleteSecret(vault, name, s.Cfg.SoftDeleteRetentionDays); err != nil && !errors.Is(err, store.ErrNotFound) {
+	if _, err := s.Store.DeleteSecret(vault, name, s.retention()); err != nil && !errors.Is(err, store.ErrNotFound) {
 		return err
 	}
 	return nil
@@ -673,7 +673,7 @@ func (s *Service) cascadeDelete(vault, name string) error {
 
 func (s *Service) deleteCertificate(w http.ResponseWriter, r *http.Request, vault string) {
 	name := r.PathValue("name")
-	d, err := s.Store.DeleteCert(vault, name, s.Cfg.SoftDeleteRetentionDays)
+	d, err := s.Store.DeleteCert(vault, name, s.retention())
 	if errors.Is(err, store.ErrNotFound) {
 		certNotFound(w, name)
 		return

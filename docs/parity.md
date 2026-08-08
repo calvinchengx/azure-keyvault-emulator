@@ -95,9 +95,9 @@ therefore means "absent", not "honestly refused".
 | Key Vault feature | Emulator | Type |
 |---|---|---|
 | Soft-delete → list-deleted → recover → purge (secrets, keys, certificates) | Real enforced state machine, retention validated 7–90 days — every transition and refusal is genuine logic, nothing pretended | 🟢 Real |
-| Retention window expiry | Genuinely clock-driven: an object past `purgeAt` purges lazily on observation — indistinguishable from a background job to any caller, and deterministic on the controllable clock | 🟢 Real |
+| Retention window expiry | Genuinely clock-driven: an object past `purgeAt` purges lazily on observation — indistinguishable from a background job to any caller, and deterministic on the controllable clock. The window itself comes from the ARM vault resource when ARM governs | 🟢 Real |
 | Name reuse while soft-deleted → `409 Conflict` | Enforced | 🟢 Real |
-| Purge protection / non-purgeable `recoveryLevel` | `-purge-protection` (or `/_emulator/purge-protection`): purge returns `403 Forbidden` and `recoveryLevel` reports `Recoverable` while enabled | 🟢 Real |
+| Purge protection / non-purgeable `recoveryLevel` | Purge returns `403 Forbidden` and `recoveryLevel` reports `Recoverable`. When ARM governs, the setting comes from the **vault resource** (`az keyvault update --enable-purge-protection`), as in Azure; standalone it is `-purge-protection` | 🟢 Real |
 
 ## Vault addressing, TLS & the object model
 

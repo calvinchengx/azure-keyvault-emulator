@@ -49,6 +49,9 @@ type Service struct {
 	// "Recoverable". Initialized from config, toggleable at runtime via
 	// /_emulator/purge-protection.
 	purgeProtection bool
+	// retentionDays overrides Cfg.SoftDeleteRetentionDays when ARM supplies
+	// the vault resource's own soft-delete window (0 = use the config).
+	retentionDays int
 }
 
 // New wires the service.
@@ -210,6 +213,24 @@ func (s *Service) SetPurgeProtection(on bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.purgeProtection = on
+}
+
+// SetSoftDeleteRetentionDays applies the vault resource's soft-delete window
+// (7–90). Zero restores the configured default.
+func (s *Service) SetSoftDeleteRetentionDays(days int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.retentionDays = days
+}
+
+// retention is the window in force: ARM's when it supplied one, else config.
+func (s *Service) retention() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.retentionDays >= 7 && s.retentionDays <= 90 {
+		return s.retentionDays
+	}
+	return s.Cfg.SoftDeleteRetentionDays
 }
 
 func (s *Service) purgeProtected() bool {
