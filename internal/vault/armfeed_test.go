@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 )
@@ -213,5 +214,63 @@ func TestARMSourceRefresh(t *testing.T) {
 	case <-stopped:
 	case <-time.After(2 * time.Second):
 		t.Fatal("Run did not stop when signalled")
+	}
+}
+
+// TestARMSourceAppliesVaultConfig: the vault RESOURCE's own configuration —
+// purge protection and the soft-delete window — comes from ARM, because in
+// Azure those are properties of the ARM resource rather than of the process
+// serving the data plane.
+func TestARMSourceAppliesVaultConfig(t *testing.T) {
+	body := `{"scope":"/s","generated":1,"assignments":[],"accessPolicies":[],
+		"enableRbacAuthorization":true,
+		"vault":{"exists":true,"enablePurgeProtection":true,"softDeleteRetentionInDays":7}}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(body))
+	}))
+	defer srv.Close()
+
+	s, st := newService(t, "")
+	if s.retention() != 90 {
+		t.Fatalf("default retention = %d", s.retention())
+	}
+	src := NewARMSource(s, srv.URL, "/s", srv.Client(), time.Second)
+	if err := src.Refresh(); err != nil {
+		t.Fatal(err)
+	}
+	// Both properties now come from the resource.
+	if !s.purgeProtected() {
+		t.Fatal("purge protection from ARM was not applied")
+	}
+	if s.retention() != 7 {
+		t.Fatalf("retention from ARM = %d; want 7", s.retention())
+	}
+	// And they show up where callers see them.
+	seed(t, st, "s1", "v")
+	w := do(s.getSecret, "GET", "/x", "", map[string]string{"name": "s1"})
+	if !strings.Contains(w.Body.String(), `"recoverableDays":7`) ||
+		!strings.Contains(w.Body.String(), `"Recoverable"`) {
+		t.Fatalf("attributes did not follow ARM: %s", w.Body.Bytes())
+	}
+
+	// A vault resource that does not exist must NOT reconfigure a running
+	// emulator — absence is not an instruction.
+	body = `{"scope":"/s","generated":2,"assignments":[],"accessPolicies":[],
+		"vault":{"exists":false,"enablePurgeProtection":false}}`
+	if err := src.Refresh(); err != nil {
+		t.Fatal(err)
+	}
+	if !s.purgeProtected() || s.retention() != 7 {
+		t.Fatal("an absent vault resource silently reconfigured the emulator")
+	}
+
+	// An out-of-range window is ignored rather than applied.
+	body = `{"scope":"/s","generated":3,"assignments":[],"accessPolicies":[],
+		"vault":{"exists":true,"softDeleteRetentionInDays":9999}}`
+	if err := src.Refresh(); err != nil {
+		t.Fatal(err)
+	}
+	if s.retention() != 7 {
+		t.Fatalf("out-of-range retention applied: %d", s.retention())
 	}
 }

@@ -17,7 +17,8 @@ both are set. Only the Entra issuer is required.
 | `--arm-subscription` | `KV_ARM_SUBSCRIPTION` | `00000000-…-0001` | Used to derive the scope. |
 | `--arm-resource-group` | `KV_ARM_RESOURCE_GROUP` | `emulator-rg` | Used to derive the scope. |
 | — | `KV_ARM_POLL_SECONDS` | `5` | How often the ARM authorization feed is refreshed. |
-| `--purge-protection` | `KV_PURGE_PROTECTION` | off | Refuse purge (`403`) and report `recoveryLevel: Recoverable`, as a purge-protected vault does. Also toggleable at runtime: `POST /_emulator/purge-protection {"enabled": true}`. |
+| `--purge-protection` | `KV_PURGE_PROTECTION` | off |
+| ~~`--purge-protection`~~ | | | Refuse purge (`403`) and report `recoveryLevel: Recoverable`, as a purge-protected vault does. Also toggleable at runtime: `POST /_emulator/purge-protection {"enabled": true}`. |
 | `--disable-tls` | `KV_DISABLE_TLS` | `false` | Serve plain HTTP (behind a TLS-terminating proxy, or for curl exploration). |
 
 ## Derived fields
@@ -48,3 +49,24 @@ to persist state and the TLS cert across restarts. See
 - Runtime knobs used only in tests — the controllable clock, fault injection,
   and the permission map — are set over HTTP through `/_emulator`
   ([Testing](10-testing.md)), not via config.
+
+## When ARM governs, the vault resource wins
+
+With `--arm-url` set, the vault's own settings come from the
+`Microsoft.KeyVault/vaults` resource in ARM, because that is where they live in
+Azure — not from this process's flags:
+
+| Setting | Flag (standalone) | ARM property (when `--arm-url` is set) |
+|---|---|---|
+| Purge protection | `--purge-protection` | `properties.enablePurgeProtection` |
+| Soft-delete window | `--soft-delete-retention-days` | `properties.softDeleteRetentionInDays` |
+| Authorization model | *(control surface)* | `properties.enableRbacAuthorization` |
+| Who may do what | `/_emulator/*` | role assignments + access policies |
+
+So `az keyvault update --enable-purge-protection true` changes the running
+emulator's behaviour, exactly as it changes a real vault's. Two guards:
+
+- **An absent vault resource changes nothing.** If ARM has no vault at the
+  configured scope, the flags stay in force — absence is not an instruction.
+- **An out-of-range window is ignored** rather than applied, the same 7–90
+  validation the flag gets.

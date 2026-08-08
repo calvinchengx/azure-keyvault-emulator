@@ -32,7 +32,7 @@ func (s *Service) keyAttrs(v *store.KeyVersion) attributes {
 	return attributes{
 		Enabled: &v.Enabled, Exportable: &v.Exportable, NBF: v.NBF, Exp: v.Exp,
 		Created: v.CreatedAt, Updated: v.UpdatedAt,
-		RecoveryLevel: s.recoveryLevel(), RecoverableDays: s.Cfg.SoftDeleteRetentionDays,
+		RecoveryLevel: s.recoveryLevel(), RecoverableDays: s.retention(),
 	}
 }
 
@@ -277,7 +277,7 @@ func (s *Service) deletedKeyBundle(w http.ResponseWriter, r *http.Request, d *st
 
 func (s *Service) deleteKey(w http.ResponseWriter, r *http.Request, vault string) {
 	name := r.PathValue("name")
-	d, err := s.Store.DeleteKey(vault, name, s.Cfg.SoftDeleteRetentionDays)
+	d, err := s.Store.DeleteKey(vault, name, s.retention())
 	if errors.Is(err, store.ErrNotFound) {
 		keyNotFound(w, name)
 		return

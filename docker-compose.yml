@@ -17,10 +17,33 @@ services:
       timeout: 2s
       retries: 10
 
+  # The management plane: role assignments and the vault resource live here,
+  # exactly as they do in Azure. With it running, `az role assignment create`
+  # and `az keyvault set-policy` govern the vault below.
+  arm-emulator:
+    image: ghcr.io/calvinchengx/arm-emulator:latest
+    depends_on:
+      entra-emulator:
+        condition: service_healthy
+    ports:
+      - "${ARM_PORT:-8445}:8445"
+    environment:
+      ARM_ENTRA_ISSUER: "https://entra-emulator:8443/11111111-1111-1111-1111-111111111111/v2.0"
+      ARM_ENTRA_TLS_INSECURE: "true"
+      ARM_TENANT_ID: "11111111-1111-1111-1111-111111111111"
+      ARM_DATA_DIR: ""
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/arm-emulator", "healthcheck"]
+      interval: 5s
+      timeout: 2s
+      retries: 10
+
   keyvault-emulator:
     image: ghcr.io/calvinchengx/azure-keyvault-emulator:latest
     depends_on:
       entra-emulator:
+        condition: service_healthy
+      arm-emulator:
         condition: service_healthy
     ports:
       - "8444:8444"
@@ -32,6 +55,12 @@ services:
       # audience with no resource-app seed step.
       KV_ENTRA_ISSUER: "https://entra-emulator:8443/11111111-1111-1111-1111-111111111111/v2.0"
       KV_ENTRA_TLS_INSECURE: "true"
+      # Authorization comes from ARM: role assignments and the vault
+      # resource's own configuration (access policies, RBAC mode, purge
+      # protection, the soft-delete window). Drop these two to fall back to
+      # the /_emulator control surface instead.
+      KV_ARM_URL: "https://arm-emulator:8445"
+      KV_ARM_RESOURCE_GROUP: "emulator-rg"
       # The image bakes KV_DATA_DIR=/data for callers who mount a volume there.
       # This file mounts none, so leaving it set makes SQLite fail to open its
       # file and the container exits 1 with "unable to open database file (14)"

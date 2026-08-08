@@ -26,7 +26,7 @@ func (s *Service) attrsOf(v *store.SecretVersion) attributes {
 	return attributes{
 		Enabled: &v.Enabled, NBF: v.NBF, Exp: v.Exp,
 		Created: v.CreatedAt, Updated: v.UpdatedAt,
-		RecoveryLevel: s.recoveryLevel(), RecoverableDays: s.Cfg.SoftDeleteRetentionDays,
+		RecoveryLevel: s.recoveryLevel(), RecoverableDays: s.retention(),
 	}
 }
 
@@ -263,7 +263,7 @@ func (s *Service) deletedBundle(r *http.Request, d *store.DeletedSecret, v *stor
 
 func (s *Service) deleteSecret(w http.ResponseWriter, r *http.Request, vault string) {
 	name := r.PathValue("name")
-	d, err := s.Store.DeleteSecret(vault, name, s.Cfg.SoftDeleteRetentionDays)
+	d, err := s.Store.DeleteSecret(vault, name, s.retention())
 	if errors.Is(err, store.ErrNotFound) {
 		secretNotFound(w, name)
 		return
