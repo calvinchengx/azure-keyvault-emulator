@@ -121,6 +121,13 @@ Two behaviours worth knowing:
 - ARM being unreachable is not fatal: the last-known grants stay in force, and
   a vault that never reached ARM starts in the permissive default.
 
+**Group assignments resolve for members.** A role assigned to a group
+(`principalType: Group`) authorizes any caller whose token carries that group
+in its `groups` claim — the user is never named in the assignment, exactly as
+data-plane RBAC resolves group membership. entra-emulator emits the claim when
+the app's `groupMembershipClaims` asks for it (its seeded *Engineering* group
+has Alice and Bob in it).
+
 The ops a role's dataActions map to are listed in
 `internal/vault/armfeed.go` — that mapping is this data plane's decision, as
 it is in Azure, where ARM stores the actions and the service interprets them.

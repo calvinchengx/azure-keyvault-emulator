@@ -166,6 +166,21 @@ func (s *Service) Allowed(principalID, op, object string) bool {
 	return s.allowed(principalID, op, object)
 }
 
+// allowedPrincipal is the gate as requests hit it: the caller's own object id
+// OR any group it belongs to may carry the grant, exactly as data-plane RBAC
+// resolves a group assignment for a member.
+func (s *Service) allowedPrincipal(p *auth.Principal, op, object string) bool {
+	if s.allowed(p.ID, op, object) {
+		return true
+	}
+	for _, g := range p.Groups {
+		if s.allowed(g, op, object) {
+			return true
+		}
+	}
+	return false
+}
+
 // allowed reports whether the principal may perform op on the named object.
 // Entries match at three granularities, mirroring data-plane RBAC scoping:
 // "*" (everything), "{type}/{op}" (the op on any object — the vault scope),
@@ -291,7 +306,7 @@ func (s *Service) withAuth(op string, h handler) http.HandlerFunc {
 			writeKVErr(w, http.StatusUnauthorized, "Unauthorized", err.Error())
 			return
 		}
-		if !s.allowed(p.ID, op, r.PathValue("name")) {
+		if !s.allowedPrincipal(p, op, r.PathValue("name")) {
 			writeKVErr(w, http.StatusForbidden, "Forbidden",
 				fmt.Sprintf("The principal is not permitted to perform %s on this vault.", op))
 			return

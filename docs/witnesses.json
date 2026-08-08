@@ -391,5 +391,13 @@
       "go:TestCompileAccessPolicies",
       "go:TestAccessPolicyOps"
     ]
+  },
+  "group-membership-in-authorization": {
+    "section": "Authentication & identity (`authentication/`)",
+    "claim": "Group membership in authorization",
+    "witnesses": [
+      "ci:arm-chain",
+      "go:TestGroupPrincipalAuthorization"
+    ]
   }
 }

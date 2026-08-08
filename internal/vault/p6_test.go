@@ -17,6 +17,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/calvinchengx/azure-keyvault-emulator/internal/auth"
 	"github.com/calvinchengx/azure-keyvault-emulator/internal/store"
 )
 
@@ -427,5 +428,45 @@ func TestObjectScopedRBAC(t *testing.T) {
 	s.SetPermissions(map[string][]string{"p3": {"secrets/get:pin"}})
 	if !s.allowed("p3", "secrets/get", "pin") || s.allowed("p3", "secrets/get", "other") {
 		t.Fatal("scoped allowlist entry not honoured")
+	}
+}
+
+func TestGroupPrincipalAuthorization(t *testing.T) {
+	s, _ := newService(t, "")
+	const groupID = "bbbbbbbb-0000-0000-0000-000000000001"
+	// The grant is bound to a GROUP, not to any user.
+	s.SetManagedPermissions(map[string][]string{groupID: {"secrets/get"}})
+
+	member := &auth.Principal{ID: "alice-oid", Type: "User", Groups: []string{groupID}}
+	stranger := &auth.Principal{ID: "carol-oid", Type: "User"}
+	otherGroup := &auth.Principal{ID: "dave-oid", Type: "User", Groups: []string{"some-other-group"}}
+
+	if !s.allowedPrincipal(member, "secrets/get", "") {
+		t.Fatal("a group member was denied its group's grant")
+	}
+	if s.allowedPrincipal(member, "secrets/set", "") {
+		t.Fatal("the group grant leaked to an operation it does not cover")
+	}
+	if s.allowedPrincipal(stranger, "secrets/get", "") {
+		t.Fatal("a non-member was allowed")
+	}
+	if s.allowedPrincipal(otherGroup, "secrets/get", "") {
+		t.Fatal("membership of an unrelated group granted access")
+	}
+
+	// A direct grant to the principal still works alongside group grants, and
+	// object scoping applies to group grants too.
+	s.SetManagedPermissions(map[string][]string{
+		"alice-oid": {"keys/sign"},
+		groupID:     {"secrets/get:shared"},
+	})
+	if !s.allowedPrincipal(member, "keys/sign", "") {
+		t.Fatal("a direct grant was lost")
+	}
+	if !s.allowedPrincipal(member, "secrets/get", "shared") {
+		t.Fatal("a scoped group grant was denied on its object")
+	}
+	if s.allowedPrincipal(member, "secrets/get", "other") {
+		t.Fatal("a scoped group grant leaked to another object")
 	}
 }

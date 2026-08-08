@@ -39,6 +39,7 @@ therefore means "absent", not "honestly refused".
 | Entra bearer challenge (`401` + `WWW-Authenticate`) | Tokenless request returns the real challenge — `Bearer authorization="…", resource="https://vault.azure.net"` with AKV code `AKV10000`; unmodified `azidentity` walks it | 🟢 Real |
 | Token validation (RS256 / JWKS / issuer / audience / expiry) | Signature verified **before any claim is read**; issuer + audience (string or array) + `exp`/`nbf` with 60s skew, on the emulator's controllable clock; JWKS cached by `kid`, refetched once on miss | 🟢 Real |
 | Principal derivation (`oid` → `sub`; `idtyp=app` → service principal) | Full | 🟢 Real |
+| Group membership in authorization | A grant to a group authorizes any caller carrying that group in its `groups` claim — the member is never named, as data-plane RBAC resolves it | 🟢 Real |
 | Multiple trusted issuers | `KV_ENTRA_ISSUER` accepts a comma-separated list; each issuer validates against its **own** JWKS, and the verifying key is bound to the token's `iss` | 🟢 Real |
 
 ## Secrets (`secrets/`)
