@@ -44,9 +44,9 @@ services:
       #   docker compose -f docker-compose.yml -f docker-compose.arm.yml up
       # or `make up ARM=1`.
       # The image bakes KV_DATA_DIR=/data for callers who mount a volume there.
-      # This file mounts none, so leaving it set makes SQLite fail to open its
-      # file and the container exits 1 with "unable to open database file (14)"
-      # — before serving anything. Empty means run in-memory, which is what a
+      # This file mounts none, so leaving it set would write the SQLite DB and
+      # TLS cert to an anonymous volume that outlives `docker compose down`.
+      # Empty means run in-memory — no volume, no leftovers — which is what a
       # throwaway pair wants. To persist instead, drop this line and add:
       #   volumes: ["kv-data:/data"]      (plus a top-level `volumes: kv-data:`)
       KV_DATA_DIR: ""
