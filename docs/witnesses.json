@@ -428,5 +428,13 @@
       "go:TestARMSourceRefresh",
       "go:TestCompileFeed"
     ]
+  },
+  "rsa-hsm-ec-hsm-key-types": {
+    "claim": "`RSA-HSM` / `EC-HSM` key types",
+    "section": "Keys (`keys/`)",
+    "witnesses": [
+      "go:TestCreateKeyBranches",
+      "ci:python-sdk"
+    ]
   }
 }

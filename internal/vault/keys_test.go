@@ -42,10 +42,14 @@ func TestCreateKeyBranches(t *testing.T) {
 	}
 	// EC default curve.
 	createTestKey(t, s, "ec", `{"kty":"EC"}`)
-	// HSM kty normalizes to the software type.
-	w := do(s.createKey, "POST", "/x", `{"kty":"RSA-HSM"}`, map[string]string{"name": "hsm"})
-	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"kty":"RSA"`) {
-		t.Fatalf("RSA-HSM = %d %s", w.Code, w.Body.Bytes())
+	// HSM key types are REFUSED, not quietly downgraded. A Standard vault
+	// rejects them in Azure too; accepting one and returning software key
+	// material would tell a caller their keys are HSM-backed when they are not.
+	for _, kty := range []string{"RSA-HSM", "EC-HSM"} {
+		w := do(s.createKey, "POST", "/x", `{"kty":"`+kty+`"}`, map[string]string{"name": "hsm"})
+		if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "Premium") {
+			t.Fatalf("%s = %d %s", kty, w.Code, w.Body.Bytes())
+		}
 	}
 	// Conflict while soft-deleted.
 	if _, err := s.Store.DeleteKey("emulator", "rsa", 90); err != nil {

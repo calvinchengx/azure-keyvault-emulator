@@ -63,7 +63,7 @@ therefore means "absent", not "honestly refused".
 | Import key (JWK) | Real: RSA `n/e/d/p/q` precomputed + validated; EC `crv/x/y/d` checked on-curve | 🟢 Real |
 | Get random bytes | Real `crypto/rand`, 1–128 enforced | 🟢 Real |
 | Public JWK exposure (private material never leaves) | Full — private PKCS#8 stays in the store | 🟢 Real |
-| `RSA-HSM` / `EC-HSM` key types | Accepted, then **silently normalised to software keys** — no HSM exists | 🟡 Emulated |
+| `RSA-HSM` / `EC-HSM` key types | **Refused** (`400`) as a Standard-tier vault refuses them — HSM-backed keys need Premium, whose guarantee is hardware. Accepting one and returning software material would tell a caller their keys are HSM-backed when they are not; same boundary as `oct` below | 🟢 Real |
 | Secure Key Release (`/release`) | `exportable` is **enforced** (a non-exportable key refuses release, as real KV) and `release_policy` is stored and returned; the JWS is genuinely signed — but **no attestation** (there is no enclave to attest) | 🟡 Emulated |
 | Key rotation **policy** (get/set) | Stored, round-tripped, and **acting**: a `Rotate` trigger's `timeAfterCreate` rotates lazily on the emulator clock; `expiryTime` drives the new version's `exp` | 🟢 Real |
 | `nbf` / `exp` enforced for cryptographic use | Crypto with an expired or not-yet-valid key returns `403`, as real Key Vault refuses; reads stay permissive | 🟢 Real |

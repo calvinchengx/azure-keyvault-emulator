@@ -76,6 +76,11 @@ func (s *Service) createKey(w http.ResponseWriter, r *http.Request, vault string
 		writeKVErr(w, http.StatusBadRequest, "BadParameter", "The request body must include kty.")
 		return
 	}
+	if hsmKeyType(body.Kty) {
+		writeKVErr(w, http.StatusBadRequest, "BadParameter",
+			fmt.Sprintf("Key type %s requires a Premium vault or Managed HSM; this vault is Standard tier.", body.Kty))
+		return
+	}
 	der, crv, err := generateKey(body.Kty, body.KeySize, body.Crv)
 	if err != nil {
 		writeKVErr(w, http.StatusBadRequest, "BadParameter", err.Error())
@@ -119,13 +124,22 @@ func (s *Service) createKey(w http.ResponseWriter, r *http.Request, vault string
 	}
 }
 
+// hsmKeyType reports whether kty asks for HSM-backed key material.
+//
+// This vault is Standard tier, and a Standard vault REFUSES these — HSM-backed
+// keys need Premium, whose guarantee is hardware this emulator does not have.
+// It used to accept them and silently hand back a software key, which is the
+// worst of both: a caller testing "our keys are HSM-backed" got a green run
+// and a false belief. Refusing is both more faithful and more useful, and it
+// is the same boundary already drawn for `oct` (Managed HSM).
+func hsmKeyType(kty string) bool {
+	return kty == "RSA-HSM" || kty == "EC-HSM"
+}
+
+// normalizeKty maps a stored kty to its wire form. HSM types never reach here
+// — they are refused at the door — so this is now identity, kept as the one
+// place a future mapping would live.
 func normalizeKty(kty string) string {
-	if kty == "RSA-HSM" {
-		return "RSA"
-	}
-	if kty == "EC-HSM" {
-		return "EC"
-	}
 	return kty
 }
 

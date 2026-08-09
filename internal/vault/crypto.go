@@ -25,7 +25,7 @@ func generateKey(kty string, keySize int, crv string) (string, string, error) {
 	var priv any
 	var err error
 	switch kty {
-	case "RSA", "RSA-HSM":
+	case "RSA":
 		// Sizes are passed as literals rather than a checked variable so the
 		// 2048-bit floor is visible to callers and to static analysis.
 		switch keySize {
@@ -39,7 +39,7 @@ func generateKey(kty string, keySize int, crv string) (string, string, error) {
 			return "", "", fmt.Errorf("unsupported RSA key_size %d", keySize)
 		}
 		crv = ""
-	case "EC", "EC-HSM":
+	case "EC":
 		var curve elliptic.Curve
 		switch crv {
 		case "", "P-256":

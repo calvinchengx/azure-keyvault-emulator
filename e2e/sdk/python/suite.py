@@ -190,6 +190,16 @@ def main():
     check("rotation policy read back",
           kc.get_key_rotation_policy("py-e2e-rsa").expires_in == "P90D")
 
+    # HSM-backed key types need Premium; a Standard vault refuses them rather
+    # than quietly handing back a software key.
+    for hsm_kty in ("RSA-HSM", "EC-HSM"):
+        try:
+            kc.create_key(f"py-e2e-{hsm_kty.lower()}", hsm_kty)
+            check(f"{hsm_kty} refused (Standard tier)", False)
+        except HttpResponseError as e:
+            check(f"{hsm_kty} refused (Standard tier)",
+                  e.status_code == 400, f"got {e.status_code}")
+
     # oct keys are a Managed HSM feature; a vault refuses them, and so do we.
     try:
         kc.create_key("py-e2e-oct", "oct")
