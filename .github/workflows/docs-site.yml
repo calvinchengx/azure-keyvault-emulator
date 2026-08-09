@@ -29,7 +29,7 @@ permissions:
   pages: write
   id-token: write
 
-# One in-flight deploy at a time; don't cancel a running publish.
+# One publish at a time, newest wins.
 #
 # PR builds get their OWN group, per ref. They must not share the deploy group:
 # GitHub keeps at most one PENDING run per concurrency group and cancels the
@@ -39,25 +39,33 @@ permissions:
 # the deploys for two consecutive main pushes, with no error anywhere to say so
 # — a cancelled run reads exactly like a harmless supersession.
 #
-# PR builds also cancel their own predecessors (only the newest matters);
-# deploys never cancel a running publish.
+# PR builds also cancel their own predecessors (only the newest matters).
 #
-# Not cancelling a running publish is right, but it means a publish that never
-# finishes holds the group forever, and the same one-pending-run rule then
-# cancels every queued main run behind it. That happened on 2026-08-08: run
-# 31239784632 created a Pages deployment that never received a single status
-# event, sat in `queued` for 35 hours, and starved twelve consecutive main
-# runs, silently, while the live site stayed 35 hours stale. Hence the
-# timeouts below: a hung publish must fail and free the group, not wait.
+# Deploys used to refuse to cancel a running publish. That looked safe and was
+# the actual failure mode: a publish that never finishes holds the group
+# forever, and the one-pending-run rule then cancels every main run queued
+# behind it. Twice now. On 2026-08-08 run 31239784632 created a Pages
+# deployment that never received a single status event, sat in `queued` for 35
+# hours and starved twelve consecutive main runs while the live site went
+# stale; on 2026-08-09 it recurred, stranding five more deployments (two
+# `error`, two with no status at all). `timeout-minutes` does not save us here:
+# it bounds execution, and these jobs never start executing.
+#
+# So deploys now supersede instead of queueing. On a docs site the newest
+# commit is the one worth publishing, a superseded publish loses nothing, and
+# every push becomes a chance to clear a stuck predecessor rather than another
+# victim of it. The sibling emulators never hit this because they merge to main
+# a few times a day; this repo did 12 docs-site runs in one day.
 concurrency:
   group: ${{ github.event_name == 'pull_request' && format('pages-pr-{0}', github.ref) || 'pages' }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: true
 
 jobs:
   build:
     name: Build Starlight site
     runs-on: ubuntu-latest
-    # A clean build takes ~30s; this only fires if something hangs.
+    # Starlight builds in ~30s; the coverage step below dominates. This only
+    # fires if something hangs.
     timeout-minutes: 15
     steps:
       # Full history + tags: the parity-version generator reads the map at each
@@ -97,8 +105,9 @@ jobs:
     # rejected by the github-pages environment regardless.
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    # The publish itself takes seconds. Bounding it is what keeps a hung
-    # deployment from holding the `pages` group indefinitely (see above).
+    # The publish itself takes seconds. This bounds one that starts and then
+    # hangs; a deployment that never starts is the supersede rule's job, since
+    # timeout-minutes does not count time spent queued.
     timeout-minutes: 10
     environment:
       name: github-pages
