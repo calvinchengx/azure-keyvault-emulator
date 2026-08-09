@@ -26,13 +26,18 @@ func generateKey(kty string, keySize int, crv string) (string, string, error) {
 	var err error
 	switch kty {
 	case "RSA", "RSA-HSM":
-		if keySize == 0 {
-			keySize = 2048
-		}
-		if keySize != 2048 && keySize != 3072 && keySize != 4096 {
+		// Sizes are passed as literals rather than a checked variable so the
+		// 2048-bit floor is visible to callers and to static analysis.
+		switch keySize {
+		case 0, 2048:
+			priv, err = rsa.GenerateKey(rand.Reader, 2048)
+		case 3072:
+			priv, err = rsa.GenerateKey(rand.Reader, 3072)
+		case 4096:
+			priv, err = rsa.GenerateKey(rand.Reader, 4096)
+		default:
 			return "", "", fmt.Errorf("unsupported RSA key_size %d", keySize)
 		}
-		priv, err = rsa.GenerateKey(rand.Reader, keySize)
 		crv = ""
 	case "EC", "EC-HSM":
 		var curve elliptic.Curve
