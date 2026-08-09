@@ -9,7 +9,7 @@
 # separate overlay (docker-compose.arm.yml) for exactly that reason.
 services:
   entra-emulator:
-    image: ghcr.io/calvinchengx/entra-emulator:${ENTRA_EMULATOR_VERSION:-0.4.0}
+    image: ghcr.io/calvinchengx/entra-emulator:${ENTRA_EMULATOR_VERSION:-0.4.1}
     environment:
       ORIGIN_MODE: compat
       PUBLIC_ORIGIN: "https://entra-emulator:8443"
@@ -54,7 +54,7 @@ services:
   # The third member — enables the secret-as-SP-credential chain across all
   # three (see e2e/chain). Start it with `docker compose --profile full up`.
   fabric-emulator:
-    image: ghcr.io/calvinchengx/fabric-emulator:${FABRIC_EMULATOR_VERSION:-0.18.0}
+    image: ghcr.io/calvinchengx/fabric-emulator:${FABRIC_EMULATOR_VERSION:-0.19.0}
     profiles: [full]
     depends_on:
       entra-emulator:
