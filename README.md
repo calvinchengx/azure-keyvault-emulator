@@ -6,6 +6,9 @@
 [![CodeQL](https://github.com/calvinchengx/azure-keyvault-emulator/actions/workflows/codeql.yml/badge.svg)](https://github.com/calvinchengx/azure-keyvault-emulator/actions/workflows/codeql.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
+[![go coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fcalvinchengx.github.io%2Fazure-keyvault-emulator%2Fcoverage-go.json)](https://calvinchengx.github.io/azure-keyvault-emulator/10-testing/)
+[![parity claims witnessed](https://img.shields.io/endpoint?url=https%3A%2F%2Fcalvinchengx.github.io%2Fazure-keyvault-emulator%2Fwitnesses.json)](https://calvinchengx.github.io/azure-keyvault-emulator/parity/)
+
 A clean-room, local emulator of the **Azure Key Vault data plane** — secrets,
 keys doing real RSA/EC cryptography, and X.509 certificates — the third member
 of an emulator family built on one principle: **the same trust relationships as

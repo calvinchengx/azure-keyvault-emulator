@@ -73,6 +73,18 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter azure-keyvault-emulator-docs build
+      # The badge endpoints ride along with the docs site, so they are served
+      # from this project's own origin rather than a coverage vendor. Written
+      # AFTER the Starlight build, which would otherwise wipe website/dist.
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.25'
+      - name: Measure coverage and write the badge endpoints
+        run: |
+          go test -coverpkg=./... -coverprofile=cover.out ./... >/dev/null
+          pct=$(go tool cover -func=cover.out | tail -1 | awk '{print $3}' | tr -d '%')
+          echo "go coverage: ${pct}%"
+          python3 scripts/coverage_badges.py --out website/dist --go "$pct"
       - uses: actions/upload-pages-artifact@v5
         if: github.event_name != 'pull_request'
         with:
