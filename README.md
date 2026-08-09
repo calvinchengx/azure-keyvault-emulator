@@ -1,7 +1,9 @@
 # azure-keyvault-emulator
 
+[![version](https://img.shields.io/github/v/release/calvinchengx/azure-keyvault-emulator?label=version)](https://github.com/calvinchengx/azure-keyvault-emulator/releases/latest)
 [![CI](https://github.com/calvinchengx/azure-keyvault-emulator/actions/workflows/ci.yml/badge.svg)](https://github.com/calvinchengx/azure-keyvault-emulator/actions/workflows/ci.yml)
 [![Docs](https://github.com/calvinchengx/azure-keyvault-emulator/actions/workflows/docs-site.yml/badge.svg)](https://calvinchengx.github.io/azure-keyvault-emulator/)
+[![CodeQL](https://github.com/calvinchengx/azure-keyvault-emulator/actions/workflows/codeql.yml/badge.svg)](https://github.com/calvinchengx/azure-keyvault-emulator/actions/workflows/codeql.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
 A clean-room, local emulator of the **Azure Key Vault data plane** — secrets,
