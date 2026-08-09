@@ -12,6 +12,10 @@ Witness kinds, deliberately distinguished because they are not equal evidence:
 
   ci:<job>      a CI job driving a real external client (strongest — this is
                 what the rule in doc 24 actually asks for)
+  sdk:<Test>    a Go test in which AZURE'S OWN client does the talking —
+                azsecrets, azkeys, azcertificates over the vault's wire.
+                Third-party evidence like ci:, but in-process rather than a
+                packaged release over a network, so it ranks below it.
   go:<Test>     a Go test: real HTTP, real signed JWTs, real RBAC, but our own
                 client rather than a third party's
   boundary:...  the claim is scoped by a documented limitation, with the reason
@@ -90,7 +94,7 @@ def main() -> int:
     jobs, tests = ci_job_ids(), go_test_names()
 
     missing, dangling, todo = [], [], []
-    kinds = {"ci": 0, "go": 0, "boundary": 0}
+    kinds = {"ci": 0, "sdk": 0, "go": 0, "boundary": 0}
     # Which claims lean on each witness — a witness covering many claims is
     # where bundling hides.
     shared: dict[str, list[str]] = {}
@@ -110,15 +114,17 @@ def main() -> int:
             shared.setdefault(witness, []).append(feature)
             if kind == "ci" and name not in jobs:
                 dangling.append(f"{key} → {witness} (no such CI job)")
-            elif kind == "go" and name not in tests:
+            elif kind in ("go", "sdk") and name not in tests:
                 dangling.append(f"{key} → {witness} (no such Go test)")
 
     print(f"🟢 capability claims: {len(claims)}")
     print(f"  witnessed by a real external client (ci:) : {kinds.get('ci', 0)}")
+    print(f"  witnessed by Azure's own SDKs (sdk:)      : {kinds.get('sdk', 0)}")
     print(f"  witnessed by our own Go tests (go:)       : {kinds.get('go', 0)}")
     print(f"  scoped by a documented boundary           : {kinds.get('boundary', 0)}")
     print(f"  not yet identified (TODO)                 : {len(todo)}")
     print(f"  absent from the manifest                  : {len(missing)}")
+    print(f"  -- third-party evidence (ci: + sdk:)      : {kinds.get('ci', 0) + kinds.get('sdk', 0)}")
 
     heavy = sorted(((w, c) for w, c in shared.items() if len(c) > 3),
                    key=lambda x: -len(x[1]))
