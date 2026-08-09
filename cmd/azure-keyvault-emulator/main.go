@@ -92,6 +92,13 @@ func run(args []string) error {
 
 // healthcheck probes /health locally and exits 0 when healthy — distroless
 // images have no shell, so container HEALTHCHECKs exec this binary.
+//
+// Verification is off by construction, not by oversight: the probe talks to
+// its own process on loopback over the self-signed cert the emulator just
+// generated, and the default deployment (KV_DATA_DIR="") never persists that
+// cert, so no trust store can contain it. It also falls back to plain HTTP
+// when TLS is disabled. CodeQL flags this as go/disabled-certificate-check;
+// the alert is dismissed in this repo and in fabric-emulator for this reason.
 func healthcheck(addr string) error {
 	host, port, err := net.SplitHostPort(addr)
 	if err != nil {
