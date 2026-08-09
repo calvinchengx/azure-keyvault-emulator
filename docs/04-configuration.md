@@ -70,13 +70,17 @@ emulator's behaviour, exactly as it changes a real vault's. Two guards:
 - **An out-of-range window is ignored** rather than applied, the same 7–90
   validation the flag gets.
 
-To try it, layer the ARM overlay onto the compose stack — it starts
-arm-emulator and sets the two variables for you:
+This is the default: `docker compose up` starts arm-emulator and points the
+vault at it. The stack also seeds what Azure gives you when you create a vault
+in the portal — the `Microsoft.KeyVault/vaults` resource and a **Key Vault
+Secrets Officer** assignment for the principal that created it — because ARM's
+rule is *no assignment means no access*, and a default stack whose first
+request is a `403` would be worse than no default at all.
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.arm.yml up   # or: make up ARM=1
+docker compose up                 # ARM governs
+KV_ARM_URL= docker compose up     # opt out; or: make up NOARM=1
 ```
 
-The overlay is separate from `docker-compose.yml` on purpose: the base stack
-pulls only images this repo and entra publish, so `make up` never waits on
-another repo's release.
+The seed is `scripts/seed-arm.py`, deliberately readable: it is also the
+documentation for doing the same thing by hand against a real vault.

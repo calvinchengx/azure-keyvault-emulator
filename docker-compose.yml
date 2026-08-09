@@ -4,9 +4,15 @@
 # the full trio (add fabric) and run e2e/chain/run.sh's flow against the
 # published ports.
 #
-# This file is deliberately self-contained: it pulls only images this repo and
-# entra publish, so `make up` never waits on another repo's release. ARM is a
-# separate overlay (docker-compose.arm.yml) for exactly that reason.
+# ARM governs authorization, as it does in Azure: role assignments and the
+# vault resource decide who may do what, and no assignment means no access.
+# That is the default because a vault whose permissions come from somewhere
+# other than ARM is not a vault anyone has to configure in production.
+#
+# Opt out with an empty KV_ARM_URL, which hands authorization back to this
+# emulator's own /_emulator control surface:
+#
+#   KV_ARM_URL= docker compose up          (or: make up NOARM=1)
 services:
   entra-emulator:
     image: ghcr.io/calvinchengx/entra-emulator:${ENTRA_EMULATOR_VERSION:-0.4.1}
@@ -23,10 +29,58 @@ services:
       timeout: 2s
       retries: 10
 
+  # The management plane: role assignments and the vault resource live here,
+  # exactly as they do in Azure.
+  arm-emulator:
+    # ARM_IMAGE_TAG, not ARM_VERSION: the e2e harnesses use ARM_VERSION for the
+    # Go module version (`v0.2.0`), while the image tag drops the v (`0.2.0`).
+    # Sharing one name would silently resolve to a tag that does not exist.
+    image: ghcr.io/calvinchengx/arm-emulator:${ARM_IMAGE_TAG:-0.2.0}
+    depends_on:
+      entra-emulator:
+        condition: service_healthy
+    ports:
+      - "${ARM_PORT:-8445}:8445"
+    environment:
+      ARM_ENTRA_ISSUER: "https://entra-emulator:8443/6f89cf12-978b-4d23-ac18-9ef0c127cf87/v2.0"
+      ARM_ENTRA_TLS_INSECURE: "true"
+      ARM_TENANT_ID: "6f89cf12-978b-4d23-ac18-9ef0c127cf87"
+      ARM_DATA_DIR: ""
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/arm-emulator", "healthcheck"]
+      interval: 5s
+      timeout: 2s
+      retries: 10
+
+  # Azure gives the principal that creates a vault a grant on it. ARM's rule is
+  # no-assignment-means-no-access, so without this the default stack would
+  # stand up a vault that refuses its own quickstart. One shot, idempotent, and
+  # readable: scripts/seed-arm.py is the documentation for doing it by hand.
+  arm-seed:
+    image: python:3.12-alpine
+    restart: "no"
+    depends_on:
+      arm-emulator:
+        condition: service_healthy
+    environment:
+      SEED_ENTRA_URL: "https://entra-emulator:8443"
+      SEED_ARM_URL: "https://arm-emulator:8445"
+      SEED_TENANT_ID: "6f89cf12-978b-4d23-ac18-9ef0c127cf87"
+      SEED_SUBSCRIPTION_ID: "6082bfda-63d0-46f4-8272-ae9195139feb"
+      SEED_RESOURCE_GROUP: "${KV_ARM_RESOURCE_GROUP:-emulator-rg}"
+      SEED_VAULT_NAME: "${KV_DEFAULT_VAULT:-emulator}"
+      SEED_CLIENT_ID: "00d88624-f0d7-46f6-a641-6232c2608928"
+      SEED_CLIENT_SECRET: "daemon-app-secret"
+    volumes:
+      - ./scripts/seed-arm.py:/seed.py:ro
+    command: ["python3", "/seed.py"]
+
   keyvault-emulator:
     image: ghcr.io/calvinchengx/azure-keyvault-emulator:latest
     depends_on:
       entra-emulator:
+        condition: service_healthy
+      arm-emulator:
         condition: service_healthy
     ports:
       - "${KV_PORT:-8444}:8444"
@@ -38,11 +92,12 @@ services:
       # audience with no resource-app seed step.
       KV_ENTRA_ISSUER: "https://entra-emulator:8443/6f89cf12-978b-4d23-ac18-9ef0c127cf87/v2.0"
       KV_ENTRA_TLS_INSECURE: "true"
-      # Authorization is this emulator's own /_emulator control surface. To
-      # have ARM govern it instead — role assignments and the vault resource's
-      # configuration, as in Azure — add the overlay:
-      #   docker compose -f docker-compose.yml -f docker-compose.arm.yml up
-      # or `make up ARM=1`.
+      # Role assignments and the vault resource's own configuration (access
+      # policies, RBAC mode, purge protection, the soft-delete window) are
+      # polled from ARM. The `-` rather than `:-` is deliberate: an explicitly
+      # empty KV_ARM_URL opts out, while unset gets the default.
+      KV_ARM_URL: "${KV_ARM_URL-https://arm-emulator:8445}"
+      KV_ARM_RESOURCE_GROUP: "${KV_ARM_RESOURCE_GROUP:-emulator-rg}"
       # The image bakes KV_DATA_DIR=/data for callers who mount a volume there.
       # This file mounts none, so leaving it set would write the SQLite DB and
       # TLS cert to an anonymous volume that outlives `docker compose down`.

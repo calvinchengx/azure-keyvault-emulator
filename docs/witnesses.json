@@ -404,5 +404,15 @@
       "go:TestGroupPrincipalAuthorization",
       "ci:az-cli"
     ]
+  },
+  "data-plane-authorization": {
+    "section": "Authorization",
+    "claim": "Data-plane authorization",
+    "witnesses": [
+      "ci:arm-chain",
+      "ci:az-cli",
+      "go:TestARMSourceRefresh",
+      "go:TestCompileFeed"
+    ]
   }
 }

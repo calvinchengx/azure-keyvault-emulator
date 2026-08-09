@@ -22,19 +22,20 @@
 #
 #   make up PROFILE="--profile full"
 #
-# ARM=1 layers docker-compose.arm.yml on top, which adds arm-emulator and hands
-# authorization to it — role assignments and the vault resource, as in Azure —
-# instead of this emulator's own /_emulator control surface:
+# ARM governs authorization by default, as in Azure: role assignments and the
+# vault resource decide access, and the stack seeds the grant Azure would give
+# the principal that created the vault. NOARM=1 opts out, handing authorization
+# back to the emulator's own /_emulator control surface.
 #
-#   make up ARM=1
-PROFILE ?=
-ARM     ?=
-ifeq ($(ARM),1)
-  COMPOSE_FILES = -f docker-compose.yml -f docker-compose.arm.yml
+#   make up
+#   make up NOARM=1
+NOARM   ?=
+ifeq ($(NOARM),1)
+  COMPOSE_ENV = KV_ARM_URL=
 else
-  COMPOSE_FILES =
+  COMPOSE_ENV =
 endif
-COMPOSE  = docker compose $(COMPOSE_FILES) $(PROFILE)
+COMPOSE  = $(COMPOSE_ENV) docker compose $(PROFILE)
 
 # Windows: force the recipes onto sh.exe. GNU Make on Windows falls back to
 # cmd.exe when it cannot find a shell, and cmd cannot run a single line of what
@@ -61,7 +62,7 @@ help: ## Show the available targets
 doctor: ## Check the toolchain and the docker context this Makefile needs
 	@sh scripts/doctor.sh
 
-up: ## Start the pair in the background (ARM=1 adds arm; PROFILE="--profile full" adds fabric)
+up: ## Start the stack in the background (NOARM=1 drops ARM governance; PROFILE="--profile full" adds fabric)
 	$(COMPOSE) up -d
 
 down: ## Stop and remove containers
