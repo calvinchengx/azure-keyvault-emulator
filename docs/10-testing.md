@@ -74,3 +74,21 @@ curl -sk -X POST https://localhost:8444/_emulator/permissions \
 - A ≥90% coverage floor, enforced in CI.
 - Every 🟢 claim in the [parity map](parity.md) names its witness, enforced by
   `scripts/check_witnesses.py --strict` in CI.
+
+### Not every witness is equal evidence
+
+Witnesses are named with their kind, ranked deliberately:
+
+| kind | what it means |
+|---|---|
+| `ci:<job>` | a CI job driving a packaged external client over a real network — the Python, JavaScript and .NET matrices above |
+| `sdk:<Test>` | a Go test in which **Azure's own** client does the talking: `azsecrets`, `azkeys`, `azcertificates` over the vault's wire, in-process |
+| `go:<Test>` | a Go test using our own client — real HTTP and real tokens, but our reading of the contract on both ends |
+| `boundary:…` | the claim is scoped by a documented limitation |
+
+`sdk:` exists because the vocabulary was understating this repo. The first
+bullet above — real-SDK e2e for all three object types — was real all along,
+but had no kind that fitted, so those tests were filed as `go:`, whose own
+definition reads "our own client rather than a third party's". Twenty
+citations counted Azure's clients as ours. Third-party evidence is 71 of the
+128 witness citations, not 51.

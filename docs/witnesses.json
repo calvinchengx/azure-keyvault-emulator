@@ -5,7 +5,7 @@
     "witnesses": [
       "ci:chain",
       "go:TestChallengeHeaderShape",
-      "go:TestAzureSDKChallengeFlowAndSecretLifecycle",
+      "sdk:TestAzureSDKChallengeFlowAndSecretLifecycle",
       "ci:python-sdk",
       "ci:js-sdk",
       "ci:dotnet-sdk"
@@ -23,7 +23,7 @@
     "section": "Authentication & identity (`authentication/`)",
     "claim": "Principal derivation (`oid` \u2192 `sub`; `idtyp=app` \u2192 service principal)",
     "witnesses": [
-      "go:TestPermissionMap"
+      "sdk:TestPermissionMap"
     ]
   },
   "set-get-list-list-versions-get-by-version": {
@@ -31,7 +31,7 @@
     "claim": "Set / get / list / list-versions, get by version",
     "witnesses": [
       "ci:chain",
-      "go:TestAzureSDKChallengeFlowAndSecretLifecycle",
+      "sdk:TestAzureSDKChallengeFlowAndSecretLifecycle",
       "go:TestSecretVersioning",
       "ci:python-sdk",
       "ci:js-sdk",
@@ -60,8 +60,8 @@
     "section": "Keys (`keys/`)",
     "claim": "Create key \u2014 **RSA** 2048/3072/4096, **EC** P-256/P-384/P-521",
     "witnesses": [
-      "go:TestAzkeysRSALifecycleAndCrypto",
-      "go:TestAzkeysECSignVerify",
+      "sdk:TestAzkeysRSALifecycleAndCrypto",
+      "sdk:TestAzkeysECSignVerify",
       "ci:python-sdk",
       "ci:js-sdk",
       "ci:dotnet-sdk"
@@ -71,8 +71,8 @@
     "section": "Keys (`keys/`)",
     "claim": "Sign / verify \u2014 RS256/384/512, PS256/384/512, ES256/384/512",
     "witnesses": [
-      "go:TestAzkeysECSignVerify",
-      "go:TestAzkeysImportAndSign",
+      "sdk:TestAzkeysECSignVerify",
+      "sdk:TestAzkeysImportAndSign",
       "ci:python-sdk",
       "ci:js-sdk",
       "ci:dotnet-sdk"
@@ -83,7 +83,7 @@
     "claim": "Encrypt / decrypt \u2014 RSA1_5, RSA-OAEP, RSA-OAEP-256",
     "witnesses": [
       "go:TestRSAEncryptRoundTrips",
-      "go:TestAzkeysRSALifecycleAndCrypto",
+      "sdk:TestAzkeysRSALifecycleAndCrypto",
       "ci:python-sdk",
       "ci:js-sdk",
       "ci:dotnet-sdk"
@@ -93,14 +93,14 @@
     "section": "Keys (`keys/`)",
     "claim": "Wrap / unwrap key",
     "witnesses": [
-      "go:TestAzkeysRSALifecycleAndCrypto"
+      "sdk:TestAzkeysRSALifecycleAndCrypto"
     ]
   },
   "import-key-jwk": {
     "section": "Keys (`keys/`)",
     "claim": "Import key (JWK)",
     "witnesses": [
-      "go:TestAzkeysImportAndSign",
+      "sdk:TestAzkeysImportAndSign",
       "go:TestImportMaterializesKeyAndSecret"
     ]
   },
@@ -108,7 +108,7 @@
     "section": "Keys (`keys/`)",
     "claim": "Get random bytes",
     "witnesses": [
-      "go:TestAzkeysRandomBytes",
+      "sdk:TestAzkeysRandomBytes",
       "go:TestGetRandomBytes"
     ]
   },
@@ -116,14 +116,14 @@
     "section": "Keys (`keys/`)",
     "claim": "Public JWK exposure (private material never leaves)",
     "witnesses": [
-      "go:TestAzkeysRSALifecycleAndCrypto"
+      "sdk:TestAzkeysRSALifecycleAndCrypto"
     ]
   },
   "create-self-signed-certificate": {
     "section": "Certificates (`certificates/`)",
     "claim": "Create self-signed certificate",
     "witnesses": [
-      "go:TestAzcertificatesSelfSignedLifecycle",
+      "sdk:TestAzcertificatesSelfSignedLifecycle",
       "ci:python-sdk",
       "ci:js-sdk",
       "ci:dotnet-sdk"
@@ -133,7 +133,7 @@
     "section": "Certificates (`certificates/`)",
     "claim": "Certificate policy (`key_props`, `x509_props`, `issuer`)",
     "witnesses": [
-      "go:TestAzcertificatesIssuers",
+      "sdk:TestAzcertificatesIssuers",
       "go:TestCertIssuerStore"
     ]
   },
@@ -141,7 +141,7 @@
     "section": "Certificates (`certificates/`)",
     "claim": "Import \u2014 PKCS#12 (PFX) and PEM (PKCS#8 / PKCS#1 / SEC1)",
     "witnesses": [
-      "go:TestAzcertificatesImportPKCS12",
+      "sdk:TestAzcertificatesImportPKCS12",
       "go:TestImportCertificateBranches"
     ]
   },
@@ -166,7 +166,7 @@
     "section": "Certificates (`certificates/`)",
     "claim": "Merge a signed chain",
     "witnesses": [
-      "go:TestAzcertificatesMerge",
+      "sdk:TestAzcertificatesMerge",
       "go:TestCertMergeFlow"
     ]
   },
@@ -258,7 +258,7 @@
       "ci:python-sdk",
       "ci:js-sdk",
       "ci:dotnet-sdk",
-      "go:TestAzcertificatesSelfSignedLifecycle"
+      "sdk:TestAzcertificatesSelfSignedLifecycle"
     ]
   },
   "purge-protection-non-purgeable-recoverylevel": {
@@ -350,15 +350,15 @@
     "section": "Certificates (`certificates/`)",
     "claim": "Issuers / contacts",
     "witnesses": [
-      "go:TestAzcertificatesMerge",
-      "go:TestAzcertificatesIssuers"
+      "sdk:TestAzcertificatesMerge",
+      "sdk:TestAzcertificatesIssuers"
     ]
   },
   "soft-delete-list-deleted-recover-purge-secrets-keys-certificates": {
     "section": "Soft-delete & recovery",
     "claim": "Soft-delete \u2192 list-deleted \u2192 recover \u2192 purge (secrets, keys, certificates)",
     "witnesses": [
-      "go:TestAzureSDKChallengeFlowAndSecretLifecycle",
+      "sdk:TestAzureSDKChallengeFlowAndSecretLifecycle",
       "go:TestCertDeleteCascade",
       "ci:python-sdk",
       "ci:js-sdk",
