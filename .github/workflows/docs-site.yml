@@ -41,6 +41,14 @@ permissions:
 #
 # PR builds also cancel their own predecessors (only the newest matters);
 # deploys never cancel a running publish.
+#
+# Not cancelling a running publish is right, but it means a publish that never
+# finishes holds the group forever, and the same one-pending-run rule then
+# cancels every queued main run behind it. That happened on 2026-08-08: run
+# 31239784632 created a Pages deployment that never received a single status
+# event, sat in `queued` for 35 hours, and starved twelve consecutive main
+# runs, silently, while the live site stayed 35 hours stale. Hence the
+# timeouts below: a hung publish must fail and free the group, not wait.
 concurrency:
   group: ${{ github.event_name == 'pull_request' && format('pages-pr-{0}', github.ref) || 'pages' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -49,6 +57,8 @@ jobs:
   build:
     name: Build Starlight site
     runs-on: ubuntu-latest
+    # A clean build takes ~30s; this only fires if something hangs.
+    timeout-minutes: 15
     steps:
       # Full history + tags: the parity-version generator reads the map at each
       # `v*` tag (git show) and stamps the live map from `git describe`.
@@ -75,6 +85,9 @@ jobs:
     # rejected by the github-pages environment regardless.
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
+    # The publish itself takes seconds. Bounding it is what keeps a hung
+    # deployment from holding the `pages` group indefinitely (see above).
+    timeout-minutes: 10
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
