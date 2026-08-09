@@ -114,10 +114,10 @@ therefore means "absent", not "honestly refused".
 
 | Key Vault feature | Emulator | Type |
 |---|---|---|
-| Data-plane authorization | A per-principal operation allowlist (`POST /_emulator/permissions`, ops named `{type}/{op}`, optional `:{object}` scope, `*` wildcard); empty = full access | 🟡 Emulated |
-| RBAC data-plane roles (Key Vault Secrets User, …) | Real when [arm-emulator](https://github.com/calvinchengx/arm-emulator) is wired in (`-arm-url`): `az role assignment create` writes the assignment over **ARM's real wire** and this data plane enforces it, no-assignment-means-no-access included. Standalone, the same roles assign over `POST /_emulator/rbac` with object-level scopes | 🟢 Real |
+| Data-plane authorization | **ARM governs by default**: assignments and access policies decide, and no assignment means no access, as in Azure. Opted out (`KV_ARM_URL=`), a per-principal allowlist stands in (`POST /_emulator/permissions`, ops `{type}/{op}`, optional `:{object}` scope, `*` wildcard) and an empty one permits everything — a posture Azure has no equivalent of, which is why it is no longer the default | 🟢 Real |
+| RBAC data-plane roles (Key Vault Secrets User, …) | Real, and wired in by default: `az role assignment create` writes the assignment over **ARM's real wire** and this data plane enforces it, no-assignment-means-no-access included. Standalone, the same roles assign over `POST /_emulator/rbac` with object-level scopes | 🟢 Real |
 | Access policies (the classic vault access-policy document) | Real via ARM the same way (`az keyvault set-policy`), including a vault's `enableRbacAuthorization` making them ignored. Standalone, the real document shape is accepted at `POST /_emulator/access-policy` | 🟢 Real |
-| Role/policy **assignment** without ARM | The `/_emulator` control surface stands in — real documents and enforcement, but not ARM's wire | 🟡 Emulated |
+| Role/policy **assignment** with ARM opted out | The `/_emulator` control surface stands in — real documents and enforcement, but not ARM's wire. Reachable only by setting `KV_ARM_URL=` | 🟡 Emulated |
 
 ## Emulator-only (no Key Vault equivalent — these exist for testing)
 

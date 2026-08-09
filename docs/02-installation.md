@@ -9,11 +9,12 @@ The emulator needs entra-emulator to validate tokens, so the compose file is
 the simplest start:
 
 ```bash
-docker compose up                 # entra :8443 + keyvault :8444
+docker compose up                 # entra :8443 + arm :8445 + keyvault :8444
 docker compose --profile full up  # adds fabric-emulator :9443 (the whole family)
 
-# Hand authorization to ARM (role assignments + the vault resource), as in Azure:
-docker compose -f docker-compose.yml -f docker-compose.arm.yml up   # adds arm :8445
+# ARM governs authorization by default, as in Azure. To opt out and use this
+# emulator's own control surface instead:
+KV_ARM_URL= docker compose up     # or: make up NOARM=1
 ```
 
 Or run the image directly against an existing entra:
