@@ -289,6 +289,33 @@ func (s *Service) baseURL(r *http.Request) string {
 	return "https://" + s.vaultName(r) + ".vault.azure.net"
 }
 
+// linkURL is an origin the CALLER can actually dial — the host it addressed us
+// on — as distinct from baseURL, which is the vault's canonical identity.
+//
+// The two must not be confused. `id`, `kid`, `sid` and `recoveryId` are
+// identifiers and stay canonical, exactly as real Key Vault returns them.
+// `nextLink` is different in kind: it is a URL the SDK is instructed to FETCH,
+// so against real Key Vault it resolves, while a canonical host emitted by an
+// emulator on localhost does not. Handing back the canonical host made every
+// Microsoft SDK's pager fail with "Failed to resolve emulator.vault.azure.net"
+// on the second page — invisible to tests that parse nextLink instead of
+// following it.
+func (s *Service) linkURL(r *http.Request) string {
+	if r.Host == "" {
+		return s.baseURL(r)
+	}
+	scheme := "https"
+	if r.TLS == nil {
+		scheme = "http"
+	}
+	// Behind the TLS-terminating proxy --disable-tls exists for, the hop to us
+	// is plaintext while the client's scheme is not.
+	if p := r.Header.Get("X-Forwarded-Proto"); p == "http" || p == "https" {
+		scheme = p
+	}
+	return scheme + "://" + r.Host
+}
+
 type handler func(w http.ResponseWriter, r *http.Request, vault string)
 
 // withAuth implements challenge-based authentication: a tokenless request

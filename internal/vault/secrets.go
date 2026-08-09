@@ -125,6 +125,10 @@ func (s *Service) getCurrent(w http.ResponseWriter, vault, name string) *store.S
 		writeKVErr(w, http.StatusForbidden, "Forbidden", "Operation get is not allowed on a disabled secret.")
 		return nil
 	}
+	if msg, ok := secretWindowRefusal(v, s.Store.Now()); !ok {
+		writeKVErr(w, http.StatusForbidden, "Forbidden", msg)
+		return nil
+	}
 	return v
 }
 
@@ -147,6 +151,10 @@ func (s *Service) getSecretVersion(w http.ResponseWriter, r *http.Request, vault
 	}
 	if !v.Enabled {
 		writeKVErr(w, http.StatusForbidden, "Forbidden", "Operation get is not allowed on a disabled secret.")
+		return
+	}
+	if msg, ok := secretWindowRefusal(v, s.Store.Now()); !ok {
+		writeKVErr(w, http.StatusForbidden, "Forbidden", msg)
 		return
 	}
 	writeJSON(w, http.StatusOK, s.bundle(r, v, true))
@@ -208,8 +216,9 @@ func (s *Service) paged(w http.ResponseWriter, r *http.Request, path string, ite
 	end := skip + max
 	var next any
 	if end < len(items) {
+		// linkURL, not baseURL: this is a URL the client will fetch.
 		next = fmt.Sprintf("%s%s?api-version=%s&maxresults=%d&$skiptoken=%d",
-			s.baseURL(r), path, r.URL.Query().Get("api-version"), max, end)
+			s.linkURL(r), path, r.URL.Query().Get("api-version"), max, end)
 	} else {
 		end = len(items)
 	}
@@ -415,4 +424,22 @@ func (s *Service) restoreSecret(w http.ResponseWriter, r *http.Request, vault st
 		return
 	}
 	writeJSON(w, http.StatusOK, s.bundle(r, cur, true))
+}
+
+// secretWindowRefusal reports whether a secret is inside its validity window,
+// and the refusal message when it is not.
+//
+// Real Key Vault refuses a GET on a secret whose nbf has not arrived or whose
+// exp has passed with 403 — NOT 404, so a caller can tell "not yours yet" from
+// "no such secret". Keys differ deliberately: there, only cryptographic
+// operations are refused while metadata reads stay permissive, because a key's
+// public half is not the secret. This asymmetry is real Key Vault's, not ours.
+func secretWindowRefusal(v *store.SecretVersion, now int64) (string, bool) {
+	if v.NBF != nil && *v.NBF > now {
+		return "Operation get is not allowed before the secret's nbf.", false
+	}
+	if v.Exp != nil && *v.Exp <= now {
+		return "Operation get is not allowed on an expired secret.", false
+	}
+	return "", true
 }

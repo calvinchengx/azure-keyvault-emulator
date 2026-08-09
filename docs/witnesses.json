@@ -53,7 +53,8 @@
     "section": "Secrets (`secrets/`)",
     "claim": "Attributes `enabled`",
     "witnesses": [
-      "go:TestUpdateSecretBranches"
+      "go:TestUpdateSecretBranches",
+      "ci:python-sdk"
     ]
   },
   "create-key-rsa-2048-3072-4096-ec-p-256-p-384-p-521": {
@@ -159,7 +160,8 @@
     "section": "Certificates (`certificates/`)",
     "claim": "Certificate signing request (PKCS#10) for a named issuer",
     "witnesses": [
-      "go:TestCertMergeFlow"
+      "go:TestCertMergeFlow",
+      "ci:python-sdk"
     ]
   },
   "merge-a-signed-chain": {
@@ -175,7 +177,8 @@
     "claim": "Name reuse while soft-deleted \u2192 `409 Conflict`",
     "witnesses": [
       "go:TestKeySoftDeleteHandlers",
-      "go:TestCertSoftDeleteHandlers"
+      "go:TestCertSoftDeleteHandlers",
+      "ci:python-sdk"
     ]
   },
   "host-routed-vaults-name-vault-azure-net": {
@@ -190,7 +193,8 @@
     "claim": "Canonical object IDs (`https://{vault}.vault.azure.net/...`)",
     "witnesses": [
       "go:TestNewVersionIDShape",
-      "go:TestVaultNameResolution"
+      "go:TestVaultNameResolution",
+      "ci:python-sdk"
     ]
   },
   "tls-with-a-cert-covering-vault-azure-net": {
@@ -206,7 +210,8 @@
     "claim": "Paging (`maxresults`, `nextLink`)",
     "witnesses": [
       "go:TestKeyVersioningAndLists",
-      "go:TestCertVersioningUpdateAndLists"
+      "go:TestCertVersioningUpdateAndLists",
+      "ci:python-sdk"
     ]
   },
   "key-vault-error-envelope-x-ms-request-id": {
@@ -214,7 +219,8 @@
     "claim": "Key Vault error envelope + `x-ms-request-id`",
     "witnesses": [
       "go:TestCryptoErrors",
-      "go:TestKeyGetUpdateListErrors"
+      "go:TestKeyGetUpdateListErrors",
+      "ci:python-sdk"
     ]
   },
   "rotate-key-post-keys-name-rotate": {
@@ -241,14 +247,16 @@
     "section": "Keys (`keys/`)",
     "claim": "`oct` / `oct-HSM` symmetric keys (and their AES algorithms)",
     "witnesses": [
-      "go:TestOctIsManagedHSMOnly"
+      "go:TestOctIsManagedHSMOnly",
+      "ci:python-sdk"
     ]
   },
   "cancel-delete-a-certificate-operation": {
     "section": "Certificates (`certificates/`)",
     "claim": "Cancel / delete a certificate operation",
     "witnesses": [
-      "go:TestCertOperationCancelAndDelete"
+      "go:TestCertOperationCancelAndDelete",
+      "ci:python-sdk"
     ]
   },
   "create-operation-lro-shape-inprogress-on-create-completed-on-poll": {
@@ -266,7 +274,8 @@
     "claim": "Purge protection / non-purgeable `recoveryLevel`",
     "witnesses": [
       "go:TestPurgeProtection",
-      "go:TestARMSourceAppliesVaultConfig"
+      "go:TestARMSourceAppliesVaultConfig",
+      "ci:python-sdk"
     ]
   },
   "api-version-validation": {
@@ -291,7 +300,8 @@
     "claim": "Attributes `nbf` / `exp`",
     "witnesses": [
       "go:TestUpdateSecretBranches",
-      "go:TestKeyValidityEnforcedOnCrypto"
+      "go:TestKeyValidityEnforcedOnCrypto",
+      "ci:python-sdk"
     ]
   },
   "backup-restore": {
@@ -306,7 +316,8 @@
     "section": "Keys (`keys/`)",
     "claim": "Key rotation **policy** (get/set)",
     "witnesses": [
-      "go:TestAutoRotation"
+      "go:TestAutoRotation",
+      "ci:python-sdk"
     ]
   },
   "nbf-exp-enforced-for-cryptographic-use": {
@@ -321,21 +332,24 @@
     "section": "Keys (`keys/`)",
     "claim": "Key backup / restore",
     "witnesses": [
-      "go:TestBackupBlobsAreSealed"
+      "go:TestBackupBlobsAreSealed",
+      "ci:python-sdk"
     ]
   },
   "delete-cascade-to-the-linked-key-secret": {
     "section": "Certificates (`certificates/`)",
     "claim": "Delete cascade to the linked key/secret",
     "witnesses": [
-      "go:TestCertDeleteCascade"
+      "go:TestCertDeleteCascade",
+      "ci:python-sdk"
     ]
   },
   "certificate-backup-restore": {
     "section": "Certificates (`certificates/`)",
     "claim": "Certificate backup / restore",
     "witnesses": [
-      "go:TestBackupBlobsAreSealed"
+      "go:TestBackupBlobsAreSealed",
+      "ci:python-sdk"
     ]
   },
   "byok-kek-wrapped-import": {
