@@ -16,8 +16,15 @@ import (
 type Config struct {
 	// Addr is the listen address, e.g. ":8444".
 	Addr string
-	// DataDir holds SQLite and TLS state. Empty means in-memory DB and
-	// ephemeral TLS keys.
+	// DataDir holds SQLite and TLS state. Defaults to ./data, so a plain
+	// `azure-keyvault-emulator` keeps its secrets, keys and certificates
+	// across restarts — the same posture as entra-emulator, and what people
+	// expect of a local vault they are building against.
+	//
+	// Setting KV_DATA_DIR to the EMPTY string opts back into in-memory, which
+	// is distinct from leaving it unset. The compose files rely on that
+	// distinction to keep a throwaway stack from accumulating a SQLite file in
+	// a container layer that is about to be deleted.
 	DataDir string
 
 	// EntraIssuer is the exact iss expected in bearer tokens, e.g.
@@ -70,7 +77,7 @@ func FromEnvPartial() *Config {
 	}
 	return &Config{
 		Addr:                    envOr("KV_ADDR", ":8444"),
-		DataDir:                 os.Getenv("KV_DATA_DIR"),
+		DataDir:                 envDefault("KV_DATA_DIR", DefaultDataDir),
 		EntraIssuer:             os.Getenv("KV_ENTRA_ISSUER"),
 		EntraJWKSURL:            os.Getenv("KV_ENTRA_JWKS_URL"),
 		EntraTLSInsecure:        boolEnv("KV_ENTRA_TLS_INSECURE"),
@@ -154,6 +161,19 @@ func (c *Config) Scope() string {
 
 func intEnv(key string, def int) int {
 	if v, err := strconv.Atoi(os.Getenv(key)); err == nil && v > 0 {
+		return v
+	}
+	return def
+}
+
+// DefaultDataDir is where state lands when KV_DATA_DIR is not set at all.
+const DefaultDataDir = "./data"
+
+// envDefault distinguishes UNSET from SET-EMPTY, which envOr cannot: unset
+// takes the default, while an explicit empty value is honoured as empty. For
+// DataDir that difference is the difference between persisting and not.
+func envDefault(key, def string) string {
+	if v, ok := os.LookupEnv(key); ok {
 		return v
 	}
 	return def
