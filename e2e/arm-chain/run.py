@@ -187,7 +187,13 @@ def driver():
                        json.dumps({"location": "westeurope",
                                    "properties": {"tenantId": TENANT, "accessPolicies": [],
                                                   "enableRbacAuthorization": True}}))
-    if status != 200:
+    # 201, not 200: arm v0.3.0 runs a vault create as a long-running
+    # operation, as ARM does, so a create answers Created and an update
+    # answers OK. Asserted exactly rather than as "200 or 201" — accepting
+    # both would stop this noticing if a create silently became an update.
+    # Step 3 already polls the data plane, so the non-terminal
+    # provisioningState in between needs no separate wait here.
+    if status != 201:
         sys.exit(f"FAIL: create vault = {status} {raw[:300]}")
     print(f"   vault resource created at {SCOPE}")
 
