@@ -45,7 +45,7 @@ ENG_GROUP = "54a9d08c-889d-489e-b534-336fe19dbfce"
 # principal the vault sees in the token's oid claim.
 ENTRA_VERSION = os.environ.get("ENTRA_VERSION", "v0.4.1")
 # /metadata/endpoints and the vault provider need arm >= v0.1.1.
-ARM_VERSION = os.environ.get("ARM_VERSION", "v0.2.0")
+ARM_VERSION = os.environ.get("ARM_VERSION", "v0.3.1")
 
 E = f"https://localhost:{ENTRA_PORT}"
 KV = f"https://localhost:{KV_PORT}"
@@ -187,7 +187,13 @@ def driver():
                        json.dumps({"location": "westeurope",
                                    "properties": {"tenantId": TENANT, "accessPolicies": [],
                                                   "enableRbacAuthorization": True}}))
-    if status != 200:
+    # 201, not 200: arm v0.3.0 runs a vault create as a long-running
+    # operation, as ARM does, so a create answers Created and an update
+    # answers OK. Asserted exactly rather than as "200 or 201" — accepting
+    # both would stop this noticing if a create silently became an update.
+    # Step 3 already polls the data plane, so the non-terminal
+    # provisioningState in between needs no separate wait here.
+    if status != 201:
         sys.exit(f"FAIL: create vault = {status} {raw[:300]}")
     print(f"   vault resource created at {SCOPE}")
 
