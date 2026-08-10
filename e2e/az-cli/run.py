@@ -43,7 +43,7 @@ TENANT = "6f89cf12-978b-4d23-ac18-9ef0c127cf87"
 SP_CLIENT = "00d88624-f0d7-46f6-a641-6232c2608928"
 SP_SECRET = "daemon-app-secret"
 ENTRA_VERSION = os.environ.get("ENTRA_VERSION", "v0.4.1")
-ARM_VERSION = os.environ.get("ARM_VERSION", "v0.2.0")
+ARM_VERSION = os.environ.get("ARM_VERSION", "v0.3.1")
 
 E = f"https://localhost:{ENTRA_PORT}"
 KV = f"https://localhost:{KV_PORT}"

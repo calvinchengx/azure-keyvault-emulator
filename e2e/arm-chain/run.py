@@ -45,7 +45,7 @@ ENG_GROUP = "54a9d08c-889d-489e-b534-336fe19dbfce"
 # principal the vault sees in the token's oid claim.
 ENTRA_VERSION = os.environ.get("ENTRA_VERSION", "v0.4.1")
 # /metadata/endpoints and the vault provider need arm >= v0.1.1.
-ARM_VERSION = os.environ.get("ARM_VERSION", "v0.2.0")
+ARM_VERSION = os.environ.get("ARM_VERSION", "v0.3.1")
 
 E = f"https://localhost:{ENTRA_PORT}"
 KV = f"https://localhost:{KV_PORT}"
