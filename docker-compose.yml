@@ -111,7 +111,7 @@ services:
   # The third member — enables the secret-as-SP-credential chain across all
   # three (see e2e/chain). Start it with `docker compose --profile full up`.
   fabric-emulator:
-    image: ghcr.io/calvinchengx/fabric-emulator:${FABRIC_EMULATOR_VERSION:-0.20.0}
+    image: ghcr.io/calvinchengx/fabric-emulator:${FABRIC_EMULATOR_VERSION:-0.22.0}
     profiles: [full]
     depends_on:
       entra-emulator:
@@ -121,8 +121,15 @@ services:
     environment:
       FABRIC_ENTRA_ISSUER: "https://entra-emulator:8443/6f89cf12-978b-4d23-ac18-9ef0c127cf87/v2.0"
       FABRIC_ENTRA_TLS_INSECURE: "true"
-      # Required since fabric 0.20.0: resolving an AzureKeyVaultReference sends
-      # a vault-audience token to the host the connection names, so fabric
-      # refuses hosts it was not told about. docs/11-family-integration.md
-      # documents that flow against this very stack.
+      # Required since fabric 0.20.0: resolving a vault-backed connection
+      # credential sends a vault-audience token to the host the connection
+      # names, so fabric refuses hosts it was not told about.
+      # docs/11-family-integration.md documents that flow against this stack.
+      #
+      # The SHAPE changed in fabric 0.22.0 and this comment named the old one:
+      # `credentialType: "AzureKeyVaultReference"` is not a Fabric credential
+      # type and is now rejected. A vault-backed credential is the owning type
+      # carrying a reference — `credentialType: "Key"` with
+      # `keyReference: {connectionId, secretName}` — where connectionId names a
+      # connection of type AzureKeyVault. This variable is unchanged.
       FABRIC_AKV_VAULT_HOST: "keyvault-emulator:8444"
