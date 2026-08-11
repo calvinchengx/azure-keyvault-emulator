@@ -38,13 +38,29 @@ Bring up the whole trio for this flow:
 docker compose --profile full up   # entra + keyvault + fabric
 ```
 
-## AKV-reference connections (fabric side)
+## Vault-backed connection credentials (fabric side)
 
 Microsoft Fabric lets a connection point at a Key Vault secret instead of
-embedding a credential (its "Azure Key Vault references" feature).
-fabric-emulator models this with an `AzureKeyVaultReference` connection
-credential type that **resolves the secret from this emulator** at connection
-create — reproducing the feature end to end offline:
+embedding a credential. It is **not** a credential type of its own: the owning
+type carries a `KeyVaultSecretReference`, so a key backed by a vault is
+
+```json
+{"credentialType": "Key",
+ "keyReference": {"connectionId": "<an AzureKeyVault connection>",
+                  "secretName": "contoso-pos-api-key"}}
+```
+
+and `connectionId` names a **connection to the vault** — not a `vaultUri`. So
+the vault is itself a connection (`type: AzureKeyVault`, parameter
+`accountName`), and binding one takes two creates.
+
+> **Changed in fabric-emulator 0.22.0.** This page previously documented a
+> `credentialType: "AzureKeyVaultReference"`, which fabric-emulator accepted and
+> real Fabric has never had. It is now rejected. Measured against a tenant on
+> 2026-08-11, along with the rest of the Create Connection contract.
+
+fabric-emulator **resolves the secret from this emulator** at connection create,
+reproducing the feature end to end offline:
 
 ```
  workspace identity ──▶ entra token ──▶ vault secret ──▶ connection
