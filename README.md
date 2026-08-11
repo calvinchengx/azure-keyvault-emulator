@@ -127,6 +127,18 @@ the [Quickstart](docs/01-quickstart.md), then
 [Certificates](docs/08-certificates.md)), and
 [Authentication](docs/09-authentication.md).
 
+## Emulator family
+
+This is the Key Vault data plane. It trusts `entra-emulator` as its issuer, and
+`fabric-emulator` consumes it — a vault-backed connection credential resolves a
+secret from here at connection-create time (see
+[docs/11](docs/11-family-integration.md)). `arm-emulator` and
+`azure-apim-emulator` complete the set.
+
+To run them together, see [**azure-emulators**](https://github.com/calvinchengx/azure-emulators): a composition-only repo
+holding the family `docker-compose.yml`, the shared issuer wiring, and the
+pinned image versions the members are tested against.
+
 ## License
 
 Apache-2.0. Clean-room: grounded solely in Microsoft's public documentation
