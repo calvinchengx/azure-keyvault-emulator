@@ -9,9 +9,9 @@
 [![go coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fcalvinchengx.github.io%2Fazure-keyvault-emulator%2Fcoverage-go.json)](https://calvinchengx.github.io/azure-keyvault-emulator/10-testing/)
 [![parity claims witnessed](https://img.shields.io/endpoint?url=https%3A%2F%2Fcalvinchengx.github.io%2Fazure-keyvault-emulator%2Fwitnesses.json)](https://calvinchengx.github.io/azure-keyvault-emulator/parity/)
 
-A clean-room, local emulator of the **Azure Key Vault data plane** — secrets,
-keys doing real RSA/EC cryptography, and X.509 certificates — the third member
-of an emulator family built on one principle: **the same trust relationships as
+A clean-room, local emulator of the **Azure Key Vault data plane**: secrets,
+keys doing real RSA/EC cryptography, and X.509 certificates, part of an
+emulator family built on one principle: **the same trust relationships as
 production**.
 
 ![azure-keyvault-emulator demo: the 401 challenge every Azure SDK follows, a real Entra token answering it, a secret round-tripped, and a real RS256 signature](docs/demo/demo.gif)
