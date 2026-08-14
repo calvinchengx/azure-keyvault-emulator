@@ -37,7 +37,7 @@ services:
     # e2e harnesses use that for the Go module version (`v0.2.0`), while the
     # image tag drops the v (`0.2.0`), so sharing one name would silently
     # resolve to a tag that does not exist.
-    image: ghcr.io/calvinchengx/arm-emulator:${ARM_EMULATOR_VERSION:-0.3.1}
+    image: ghcr.io/calvinchengx/arm-emulator:${ARM_EMULATOR_VERSION:-0.4.1}
     depends_on:
       entra-emulator:
         condition: service_healthy
@@ -111,7 +111,7 @@ services:
   # The third member — enables the secret-as-SP-credential chain across all
   # three (see e2e/chain). Start it with `docker compose --profile full up`.
   fabric-emulator:
-    image: ghcr.io/calvinchengx/fabric-emulator:${FABRIC_EMULATOR_VERSION:-0.23.0}
+    image: ghcr.io/calvinchengx/fabric-emulator:${FABRIC_EMULATOR_VERSION:-0.24.0}
     profiles: [full]
     depends_on:
       entra-emulator:
