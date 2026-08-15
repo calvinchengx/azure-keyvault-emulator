@@ -34,7 +34,7 @@ TENANT = "6f89cf12-978b-4d23-ac18-9ef0c127cf87"
 SP_CLIENT = "00d88624-f0d7-46f6-a641-6232c2608928"
 SP_SECRET = "daemon-app-secret"
 # entra >= v0.2.1 has the https://vault.azure.net carve-out.
-ENTRA_VERSION = os.environ.get("ENTRA_VERSION", "v0.7.0")
+ENTRA_VERSION = os.environ.get("ENTRA_VERSION", "v0.8.1")
 FABRIC_VERSION = os.environ.get("FABRIC_VERSION", "latest")
 
 E = f"https://localhost:{ENTRA_PORT}"
