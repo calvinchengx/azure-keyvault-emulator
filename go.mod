@@ -3,7 +3,7 @@ module github.com/calvinchengx/azure-keyvault-emulator
 go 1.25.11
 
 require (
-	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.22.0
+	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.23.0
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.14.0
 	github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azcertificates v1.5.0
 	github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azkeys v1.5.0
@@ -38,7 +38,7 @@ require (
 	github.com/tinylib/msgp v1.6.4 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	golang.org/x/crypto v0.54.0 // indirect
-	golang.org/x/net v0.56.0 // indirect
+	golang.org/x/net v0.57.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/text v0.40.0 // indirect
 	modernc.org/libc v1.74.4 // indirect
