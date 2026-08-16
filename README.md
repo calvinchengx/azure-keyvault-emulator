@@ -129,11 +129,15 @@ the [Quickstart](docs/01-quickstart.md), then
 
 ## Emulator family
 
-This is the Key Vault data plane. It trusts `entra-emulator` as its issuer, and
-`fabric-emulator` consumes it — a vault-backed connection credential resolves a
-secret from here at connection-create time (see
-[docs/11](docs/11-family-integration.md)). `arm-emulator` and
-`azure-apim-emulator` complete the set.
+This is the Key Vault data plane. It trusts
+[`entra-emulator`](https://github.com/calvinchengx/entra-emulator) as its issuer, and
+[`fabric-emulator`](https://github.com/calvinchengx/fabric-emulator) consumes it — a vault-backed connection
+credential resolves a secret from here at connection-create time (see
+[docs/11](docs/11-family-integration.md)).
+[`arm-emulator`](https://github.com/calvinchengx/arm-emulator) governs it: role assignments decide who may
+read what. [`azure-apim-emulator`](https://github.com/calvinchengx/azure-apim-emulator) takes named values
+and certificates from here, and
+[`databricks-emulator`](https://github.com/calvinchengx/databricks-emulator) completes the set.
 
 To run them together, see [**azure-emulators**](https://github.com/calvinchengx/azure-emulators): a composition-only repo
 holding the family `docker-compose.yml`, the shared issuer wiring, and the
