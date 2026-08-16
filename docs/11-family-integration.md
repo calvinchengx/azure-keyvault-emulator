@@ -1,14 +1,23 @@
 # 11 — Family integration
 
-azure-keyvault-emulator is the third member of an emulator family built on one
-principle: **the same trust relationships as production**. entra-emulator
-issues tokens; the fabric and keyvault emulators validate them against entra's
-JWKS. The payoff is that they compose into a faithful offline Azure environment.
+azure-keyvault-emulator is one of six emulators built on a single principle:
+**the same trust relationships as production**. entra-emulator issues tokens;
+every other member validates them against entra's JWKS. The payoff is that they
+compose into a faithful offline Azure environment.
 
-- [entra-emulator](https://github.com/calvinchengx/entra-emulator) — the STS.
-- [fabric-emulator](https://github.com/calvinchengx/fabric-emulator) — the
-  Microsoft Fabric control + data plane.
+- [entra-emulator](https://github.com/calvinchengx/entra-emulator) — the STS. Everything below validates
+  the tokens it issues.
+- [arm-emulator](https://github.com/calvinchengx/arm-emulator) — ARM control plane and RBAC. Governs this
+  vault: role assignments decide who may read what.
 - **azure-keyvault-emulator** — the secret store.
+- [fabric-emulator](https://github.com/calvinchengx/fabric-emulator) — the Microsoft Fabric control + data
+  plane.
+- [azure-apim-emulator](https://github.com/calvinchengx/azure-apim-emulator) — API Management. Takes named
+  values and certificates from here.
+- [databricks-emulator](https://github.com/calvinchengx/databricks-emulator) — a Databricks workspace.
+
+Run them together with [azure-emulators](https://github.com/calvinchengx/azure-emulators), which holds the
+family compose file and the pinned versions they are certified against.
 
 ## The secret-as-SP-credential chain
 
