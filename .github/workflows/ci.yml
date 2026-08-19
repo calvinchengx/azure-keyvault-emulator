@@ -135,6 +135,16 @@ jobs:
       # CryptographyClient, and the self-signed certificate LRO.
       - run: python e2e/sdk/run.py python
 
+  host-routed:
+    name: Real SDK at {name}.vault.azure.net, checks ON
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # Everything runs in compose: the vault answers to a network ALIAS, which
+      # is what lets the SDK keep verify_challenge_resource on. The vault image
+      # is built from this checkout, not pulled.
+      - run: python3 e2e/host-routed/run.py
+
   js-sdk:
     name: Real JavaScript SDK (@azure/keyvault-*) against the emulator pair
     strategy:

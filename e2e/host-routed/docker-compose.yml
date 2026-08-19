@@ -1,0 +1,99 @@
+# The vault answers to its REAL name here, not to localhost.
+#
+# Every other SDK suite in this repo dials https://localhost:8444 and therefore
+# has to switch OFF the SDK's challenge-resource verification, because the
+# challenge names https://vault.azure.net and the URL does not. A compose
+# network alias removes that compromise: `contoso.vault.azure.net` resolves to
+# the vault container, so the real client can keep its real checks on.
+#
+# THREE entra instances, deliberately. Two are trusted (comma-separated in
+# KV_ENTRA_ISSUER) so "multiple trusted issuers" is exercised by tokens that
+# genuinely come from different issuers rather than by one issuer listed twice.
+# The third is never listed, so the refusal it earns is evidence that the
+# issuer check does something, not that the emulator happens to say yes.
+services:
+  entra-a:
+    image: ghcr.io/calvinchengx/entra-emulator:${ENTRA_EMULATOR_VERSION:-0.8.1}
+    environment:
+      ORIGIN_MODE: compat
+      PUBLIC_ORIGIN: "https://entra-a:8443"
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/entra-emulator", "healthcheck"]
+      interval: 5s
+      timeout: 2s
+      retries: 20
+
+  entra-b:
+    image: ghcr.io/calvinchengx/entra-emulator:${ENTRA_EMULATOR_VERSION:-0.8.1}
+    environment:
+      ORIGIN_MODE: compat
+      PUBLIC_ORIGIN: "https://entra-b:8443"
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/entra-emulator", "healthcheck"]
+      interval: 5s
+      timeout: 2s
+      retries: 20
+
+  # Never named in KV_ENTRA_ISSUER. Its tokens are well-formed and correctly
+  # signed by ITS OWN keys -- the only thing wrong with them is where they came
+  # from, which is exactly the property under test.
+  entra-untrusted:
+    image: ghcr.io/calvinchengx/entra-emulator:${ENTRA_EMULATOR_VERSION:-0.8.1}
+    environment:
+      ORIGIN_MODE: compat
+      PUBLIC_ORIGIN: "https://entra-untrusted:8443"
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/entra-emulator", "healthcheck"]
+      interval: 5s
+      timeout: 2s
+      retries: 20
+
+  keyvault:
+    # Built from THIS checkout. A published image would witness the last
+    # release rather than the change under review.
+    build:
+      context: ../..
+    depends_on:
+      entra-a:
+        condition: service_healthy
+      entra-b:
+        condition: service_healthy
+      entra-untrusted:
+        condition: service_healthy
+    # 443, and therefore root. The SDK's challenge check compares the vault's
+    # host to the challenge resource `vault.azure.net`, and a :8444 on the end
+    # fails that comparison -- so a port here would force the very
+    # verify_challenge_resource=False this suite exists to avoid. Real Key Vault
+    # is on 443; matching it is what keeps the check honest.
+    user: "0:0"
+    environment:
+      KV_ADDR: ":443"
+      KV_ENTRA_ISSUER: "https://entra-a:8443/${TENANT}/v2.0,https://entra-b:8443/${TENANT}/v2.0"
+      KV_ENTRA_TLS_INSECURE: "true" # the entra certs are self-signed on this network
+      KV_DATA_DIR: "/data"
+    volumes:
+      - kvdata:/data
+    networks:
+      default:
+        aliases:
+          # What makes this suite different from every other one here.
+          - contoso.vault.azure.net
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/azure-keyvault-emulator", "healthcheck", "--addr", "https://127.0.0.1:443"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  client:
+    image: python:3.12-slim
+    depends_on:
+      keyvault:
+        condition: service_healthy
+    volumes:
+      # Read-only, and only to TRUST the vault's cert. The client never reads
+      # anything else out of the vault's data directory.
+      - kvdata:/kvdata:ro
+    command: ["sleep", "infinity"]
+
+volumes:
+  kvdata:

@@ -88,3 +88,7 @@ test: ## Go build, vet and unit tests (starts a real entra-emulator in-process)
 chain: ## The three-emulator secret-as-SP-credential chain (e2e/chain)
 	@test -n "$(PY)" || { echo "no working python found (tried python3, python, py); set PY=" >&2; exit 1; }
 	$(PY) e2e/chain/run.py
+
+e2e-host-routed: ## Real SDK at {name}.vault.azure.net with TLS + challenge checks ON
+	@command -v docker >/dev/null || { echo "docker is required on PATH" >&2; exit 1; }
+	python3 e2e/host-routed/run.py

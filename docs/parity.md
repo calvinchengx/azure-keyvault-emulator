@@ -37,10 +37,10 @@ therefore means "absent", not "honestly refused".
 | Key Vault feature | Emulator | Type |
 |---|---|---|
 | Entra bearer challenge (`401` + `WWW-Authenticate`) | Tokenless request returns the real challenge — `Bearer authorization="…", resource="https://vault.azure.net"` with AKV code `AKV10000`; unmodified `azidentity` walks it | 🟢 Real |
-| Token validation (RS256 / JWKS / issuer / audience / expiry) | Signature verified **before any claim is read**; issuer + audience (string or array) + `exp`/`nbf` with 60s skew, on the emulator's controllable clock; JWKS cached by `kid`, refetched once on miss | 🟢 Real |
+| Token validation (RS256 / JWKS / issuer / audience / expiry) | Signature verified **before any claim is read**; issuer + audience (string or array) + `exp`/`nbf` with 60s skew, on the emulator's controllable clock; JWKS cached by `kid`, refetched once on miss. `ci:host-routed` drives the JWKS, issuer and audience halves with Microsoft's SDK: a token from an unlisted issuer and a valid token minted for `https://management.azure.com` are each refused 401. **`exp`/`nbf` remain witnessed by Go tests alone** — expiry needs the controllable clock, which no external client can reach. | 🟢 Real |
 | Principal derivation (`oid` → `sub`; `idtyp=app` → service principal) | Full | 🟢 Real |
 | Group membership in authorization | A grant to a group authorizes any caller carrying that group in its `groups` claim — the member is never named, as data-plane RBAC resolves it | 🟢 Real |
-| Multiple trusted issuers | `KV_ENTRA_ISSUER` accepts a comma-separated list; each issuer validates against its **own** JWKS, and the verifying key is bound to the token's `iss` | 🟢 Real |
+| Multiple trusted issuers | `KV_ENTRA_ISSUER` accepts a comma-separated list; each issuer validates against its **own** JWKS, and the verifying key is bound to the token's `iss`. `ci:host-routed` runs **two separate entra-emulator instances** with different signing keys and accepts a token from each; dropping one from the list makes the suite fail naming the missing JWKS key. | 🟢 Real |
 
 ## Secrets (`secrets/`)
 
@@ -103,9 +103,9 @@ therefore means "absent", not "honestly refused".
 
 | Key Vault feature | Emulator | Type |
 |---|---|---|
-| Host-routed vaults (`{name}.vault.azure.net`) | Full — host selects the vault; anything else falls back to the default vault | 🟢 Real |
+| Host-routed vaults (`{name}.vault.azure.net`) | Full — host selects the vault; anything else falls back to the default vault. `ci:host-routed` reaches the vault at `https://contoso.vault.azure.net` with **`verify_challenge_resource` left ON**, which the localhost suites have to disable: the SDK refuses to send a token unless the host matches the `https://vault.azure.net` challenge. | 🟢 Real |
 | Canonical object IDs (`https://{vault}.vault.azure.net/...`) | Always rendered canonically regardless of the listen address | 🟢 Real |
-| TLS with a cert covering `*.vault.azure.net` | Real self-signed material, persisted so fingerprints are stable | 🟢 Real |
+| TLS with a cert covering `*.vault.azure.net` | Real self-signed material, persisted so fingerprints are stable. `ci:host-routed` verifies the chain rather than skipping it (`connection_verify` points at the vault's own `cert.pem`), so the wildcard SAN is load-bearing: removing it fails the suite with `certificate is not valid for 'contoso.vault.azure.net'`. | 🟢 Real |
 | Paging (`maxresults`, `nextLink`) | Full, capped at 25 | 🟢 Real |
 | Key Vault error envelope + `x-ms-request-id` | On every response | 🟢 Real |
 | `api-version` validation | Required and validated: the 7.x line and the date-based versions current SDKs send (e.g. `2025-07-01`) are accepted; anything else gets the real `400` envelope. Behaviour is not version-differentiated | 🟢 Real |
