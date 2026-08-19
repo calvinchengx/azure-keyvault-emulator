@@ -15,6 +15,7 @@
     "section": "Authentication & identity (`authentication/`)",
     "claim": "Token validation (RS256 / JWKS / issuer / audience / expiry)",
     "witnesses": [
+      "ci:host-routed",
       "go:TestJWKSFailureModes",
       "go:TestChallengeAndFaults"
     ]
@@ -185,6 +186,7 @@
     "section": "Vault addressing, TLS & the object model",
     "claim": "Host-routed vaults (`{name}.vault.azure.net`)",
     "witnesses": [
+      "ci:host-routed",
       "go:TestVaultNameResolution"
     ]
   },
@@ -201,6 +203,7 @@
     "section": "Vault addressing, TLS & the object model",
     "claim": "TLS with a cert covering `*.vault.azure.net`",
     "witnesses": [
+      "ci:host-routed",
       "go:TestRunServesTLS",
       "go:TestRunDataDirAndTLSFailures"
     ]
@@ -292,6 +295,7 @@
     "section": "Authentication & identity (`authentication/`)",
     "claim": "Multiple trusted issuers",
     "witnesses": [
+      "ci:host-routed",
       "go:TestMultiIssuer"
     ]
   },
