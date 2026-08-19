@@ -86,7 +86,7 @@ jobs:
       # AFTER the Starlight build, which would otherwise wipe website/dist.
       - uses: actions/setup-go@v7
         with:
-          go-version: '1.25'
+          go-version-file: go.mod
       - name: Measure coverage and write the badge endpoints
         run: |
           go test -coverpkg=./... -coverprofile=cover.out ./... >/dev/null
