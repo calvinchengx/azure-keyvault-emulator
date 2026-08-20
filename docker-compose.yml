@@ -111,7 +111,7 @@ services:
   # The third member — enables the secret-as-SP-credential chain across all
   # three (see e2e/chain). Start it with `docker compose --profile full up`.
   fabric-emulator:
-    image: ghcr.io/calvinchengx/fabric-emulator:${FABRIC_EMULATOR_VERSION:-0.30.0}
+    image: ghcr.io/calvinchengx/fabric-emulator:${FABRIC_EMULATOR_VERSION:-0.32.0}
     profiles: [full]
     depends_on:
       entra-emulator:
