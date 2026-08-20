@@ -75,7 +75,7 @@ func newFixture(t *testing.T) *fixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { srv.Close() })
+	t.Cleanup(func() { _ = srv.Close() })
 	kv := httptest.NewTLSServer(srv.Handler())
 	t.Cleanup(kv.Close)
 

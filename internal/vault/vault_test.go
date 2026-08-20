@@ -24,7 +24,7 @@ func newService(t *testing.T, dataDir string) (*Service, *store.Store) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { st.Close() })
+	t.Cleanup(func() { _ = st.Close() })
 	cfg := &config.Config{EntraIssuer: "https://e/t/v2.0", DefaultVault: "emulator", SoftDeleteRetentionDays: 90}
 	if err := cfg.Finish(); err != nil {
 		t.Fatal(err)

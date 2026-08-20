@@ -299,7 +299,7 @@ func TestP6ErrorPaths(t *testing.T) {
 
 	// Closed-DB sweep over the cert lifecycle handlers' first storage reads.
 	s6, st6 := newService(t, "")
-	st6.Close()
+	_ = st6.Close()
 	for name, h := range map[string]handler{
 		"recover": s6.recoverCertificate, "purge": s6.purgeCertificate,
 		"delete": s6.deleteCertificate, "getDeleted": s6.getDeletedCertificate,

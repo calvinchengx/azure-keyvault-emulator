@@ -297,7 +297,7 @@ func TestP5ClosedDBErrors(t *testing.T) {
 	if w := do(s.cancelCertificateOperation, "PATCH", "/x", `{nope`, nv); w.Code != http.StatusBadRequest {
 		t.Fatalf("malformed cancel = %d", w.Code)
 	}
-	st.Close()
+	_ = st.Close()
 	for name, w := range map[string]*httptest.ResponseRecorder{
 		"rotate":    do(s.rotateKey, "POST", "/x", "", nv),
 		"release":   do(s.releaseKey, "POST", "/x", `{}`, nv),

@@ -136,7 +136,7 @@ func TestKeyStoreNotFoundAndClosed(t *testing.T) {
 	}
 
 	closed := newTestStore(t)
-	closed.Close()
+	_ = closed.Close()
 	if err := closed.SetKey(rsaKey("v", "k")); err == nil {
 		t.Error("SetKey on closed DB succeeded")
 	}

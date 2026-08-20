@@ -112,7 +112,7 @@ func TestCertStoreNotFoundAndClosed(t *testing.T) {
 	}
 
 	closed := newTestStore(t)
-	closed.Close()
+	_ = closed.Close()
 	if err := closed.SetCert(cert("v", "c")); err == nil {
 		t.Error("SetCert on closed DB succeeded")
 	}

@@ -69,7 +69,7 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
-	defer srv.Close()
+	defer func() { _ = srv.Close() }()
 
 	ln, err := net.Listen("tcp", cfg.Addr)
 	if err != nil {

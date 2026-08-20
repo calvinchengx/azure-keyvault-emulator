@@ -14,7 +14,7 @@ func newTestStore(t *testing.T) *Store {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { s.Close() })
+	t.Cleanup(func() { _ = s.Close() })
 	return s
 }
 
@@ -174,7 +174,7 @@ func TestNotFoundAndClosedDB(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	closed.Close()
+	_ = closed.Close()
 	if err := closed.SetSecret(&SecretVersion{Vault: "v", Name: "s", Value: "x"}); err == nil {
 		t.Error("SetSecret on closed DB succeeded")
 	}
