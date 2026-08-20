@@ -22,7 +22,7 @@ func newControlServer(t *testing.T) *Server {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { s.Close() })
+	t.Cleanup(func() { _ = s.Close() })
 	return s
 }
 
@@ -199,7 +199,7 @@ func TestARMSourceUnreachable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("server.New with a dead ARM: %v", err)
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 	// Authorization was never applied, so the un-configured posture holds.
 	if !s.Vault.Allowed("anyone", "secrets/get", "") {
 		t.Fatal("a failed startup refresh left the vault locked down")

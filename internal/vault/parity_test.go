@@ -279,12 +279,17 @@ func ecImportBody(t *testing.T, keyOps []string) string {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// jwkParts uses PublicKey.Bytes and PrivateKey.Bytes rather than the
+	// deprecated X/Y/D fields. They are fixed-length by definition, where
+	// big.Int.Bytes() drops leading zeros and emits a member one byte short
+	// roughly once in 256 keys, which is a flake nobody reproduces on demand.
+	x, y, d := jwkParts(t, k)
 	jwk := map[string]any{
 		"kty":     "EC",
 		"crv":     "P-256",
-		"x":       b64uStr(k.X.Bytes()),
-		"y":       b64uStr(k.Y.Bytes()),
-		"d":       b64uStr(k.D.Bytes()),
+		"x":       x,
+		"y":       y,
+		"d":       d,
 		"key_ops": keyOps,
 	}
 	raw, _ := json.Marshal(map[string]any{"key": jwk})

@@ -184,11 +184,35 @@ func importJWK(j jwkImport) (privateDER, kty, crv string, err error) {
 			}
 			vals[name] = new(big.Int).SetBytes(b)
 		}
-		priv := &ecdsa.PrivateKey{D: vals["d"]}
-		priv.PublicKey.Curve = curve
-		priv.PublicKey.X, priv.PublicKey.Y = vals["x"], vals["y"]
-		if !curve.IsOnCurve(priv.PublicKey.X, priv.PublicKey.Y) {
+		// Parsed rather than assembled by field. Setting D, X and Y directly is
+		// deprecated as of Go 1.26 (raw coordinates can produce invalid keys and
+		// defeat internal optimizations), and the parsers validate what the old
+		// code had to check by hand, or did not check at all: the point is on
+		// the curve, the scalar is in range, and d actually corresponds to the
+		// x and y that came with it. A JWK carrying a mismatched pair used to
+		// import as a working key that produced signatures nobody could verify.
+		size := (curve.Params().BitSize + 7) / 8
+		for _, name := range []string{"x", "y", "d"} {
+			if len(vals[name].Bytes()) > size {
+				return "", "", "", fmt.Errorf("member %q is too long for curve %s", name, j.Crv)
+			}
+		}
+		point := make([]byte, 1+2*size)
+		point[0] = 4 // uncompressed
+		vals["x"].FillBytes(point[1 : 1+size])
+		vals["y"].FillBytes(point[1+size:])
+		pub, perr := ecdsa.ParseUncompressedPublicKey(curve, point)
+		if perr != nil {
 			return "", "", "", fmt.Errorf("EC public point is not on curve %s", j.Crv)
+		}
+		scalar := make([]byte, size)
+		vals["d"].FillBytes(scalar)
+		priv, kerr := ecdsa.ParseRawPrivateKey(curve, scalar)
+		if kerr != nil {
+			return "", "", "", fmt.Errorf("EC private scalar is not valid for curve %s", j.Crv)
+		}
+		if !priv.PublicKey.Equal(pub) {
+			return "", "", "", fmt.Errorf("EC private key does not match the supplied public point")
 		}
 		der, merr := x509.MarshalPKCS8PrivateKey(priv)
 		if merr != nil {
@@ -357,6 +381,14 @@ func encrypt(priv any, alg string, plaintext []byte) ([]byte, error) {
 	}
 	switch alg {
 	case "RSA1_5":
+		// Go 1.26 deprecates PKCS #1 v1.5 encryption because it is dangerous,
+		// and it is right. It stays because **Azure Key Vault offers RSA1_5**:
+		// it is a documented algorithm of the service this emulates, real
+		// clients select it, and an emulator that refused it would report a
+		// parity gap that the service does not have. The deprecation is advice
+		// to people designing new protocols; this code is implementing
+		// somebody else's existing one.
+		//nolint:staticcheck // SA1019: RSA1_5 is part of the emulated API surface
 		return rsa.EncryptPKCS1v15(rand.Reader, &k.PublicKey, plaintext)
 	case "RSA-OAEP":
 		return rsa.EncryptOAEP(sha1.New(), rand.Reader, &k.PublicKey, plaintext, nil)
@@ -374,6 +406,12 @@ func decrypt(priv any, alg string, ciphertext []byte) ([]byte, error) {
 	}
 	switch alg {
 	case "RSA1_5":
+		// As above. The specific hazard the deprecation names, that whether
+		// this returns an error leaks secret information to an attacker who
+		// can run it repeatedly, is a property of the algorithm that the real
+		// service shares. Diverging here would hide it rather than fix it, and
+		// hiding a real service's weakness is the opposite of emulating it.
+		//nolint:staticcheck // SA1019: RSA1_5 is part of the emulated API surface
 		return rsa.DecryptPKCS1v15(rand.Reader, k, ciphertext)
 	case "RSA-OAEP":
 		return rsa.DecryptOAEP(sha1.New(), rand.Reader, k, ciphertext, nil)

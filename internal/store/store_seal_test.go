@@ -22,14 +22,14 @@ func TestSealKeyPersistsAcrossOpens(t *testing.T) {
 	if k, _ := s1.SealKey(); string(k) != string(k1) {
 		t.Fatal("SealKey not cached")
 	}
-	s1.Close()
+	_ = s1.Close()
 
 	// A fresh open reads the same persisted key.
 	s2, err := Open(dir, clock.New())
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer s2.Close()
+	defer func() { _ = s2.Close() }()
 	if k2, _ := s2.SealKey(); string(k2) != string(k1) {
 		t.Fatal("SealKey not persisted across opens")
 	}
@@ -42,7 +42,7 @@ func TestSealKeyPersistsAcrossOpens(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer s3.Close()
+	defer func() { _ = s3.Close() }()
 	if k3, err := s3.SealKey(); err != nil || len(k3) != 32 || string(k3) == string(k1) {
 		t.Fatalf("corrupt key file not regenerated: %v %v", k3, err)
 	}
@@ -52,7 +52,7 @@ func TestSealKeyPersistsAcrossOpens(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer m.Close()
+	defer func() { _ = m.Close() }()
 	if k, err := m.SealKey(); err != nil || len(k) != 32 {
 		t.Fatalf("ephemeral SealKey = %v, %v", k, err)
 	}

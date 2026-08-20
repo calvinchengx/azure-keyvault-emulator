@@ -122,7 +122,7 @@ func TestPendingCertStore(t *testing.T) {
 // so their error-return branches are exercised.
 func TestParityClosedDB(t *testing.T) {
 	c := newTestStore(t)
-	c.Close()
+	_ = c.Close()
 	checks := map[string]func() error{
 		"GetKeyRotationPolicy": func() error { _, e := c.GetKeyRotationPolicy("v", "k"); return e },
 		"SetKeyRotationPolicy": func() error { return c.SetKeyRotationPolicy("v", "k", "{}") },

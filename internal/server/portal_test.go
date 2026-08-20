@@ -85,7 +85,7 @@ func TestPortalDataEndpoints(t *testing.T) {
 // takes its 500 path (Vaults() fails).
 func TestPortalStorageFailure(t *testing.T) {
 	s := newControlServer(t)
-	s.Store.Close()
+	_ = s.Store.Close()
 	for _, path := range []string{
 		"/_emulator/portal/data/overview",
 		"/_emulator/portal/data/secrets",

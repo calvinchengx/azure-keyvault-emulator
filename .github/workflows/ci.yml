@@ -210,3 +210,22 @@ jobs:
       # exits 0 and publishes a 404. Nor can it see a page missing from the
       # sidebar, which is published but unreachable by navigation.
       - run: uv run --no-project --python 3.12 python scripts/check_docs_links.py --strict
+
+  lint:
+    name: golangci-lint
+    runs-on: ubuntu-latest
+    # A wedged run must fail rather than sit in GitHub's 6-hour default, where
+    # 'pending' and 'stuck' look identical.
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      # Gated at zero. .golangci.yml excludes unchecked Close, Rollback and
+      # writes to a response, where the return value is unactionable at the
+      # call site; everything surviving that is fixed rather than suppressed.
+      - uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.12.2
