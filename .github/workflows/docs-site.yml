@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - 'docs/**'
+      - 'site/**'
+      - 'scripts/build_landing_data.py'
       - 'website/**'
       - 'pnpm-lock.yaml'
       - 'pnpm-workspace.yaml'
@@ -16,6 +18,8 @@ on:
   pull_request:
     paths:
       - 'docs/**'
+      - 'site/**'
+      - 'scripts/build_landing_data.py'
       - 'website/**'
       - 'pnpm-lock.yaml'
       - 'pnpm-workspace.yaml'
@@ -81,9 +85,26 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter azure-keyvault-emulator-docs build
-      # The badge endpoints ride along with the docs site, so they are served
-      # from this project's own origin rather than a coverage vendor. Written
-      # AFTER the Starlight build, which would otherwise wipe website/dist.
+      # The published site is the hand-written landing page at the root with
+      # the rendered docs beneath it, so `/` is the project's front door and
+      # every chapter lives under `/docs/`. The landing page needs no build: it
+      # is one self-contained file, and publishing it is a copy.
+      #
+      # Astro's `base` is `/azure-keyvault-emulator/docs/` for exactly this
+      # layout. Change one without the other and Starlight still builds, but
+      # every internal link resolves a directory too high.
+      - name: Assemble the site
+        run: |
+          set -euo pipefail
+          test -s site/index.html
+          mkdir -p _site
+          cp site/index.html _site/index.html
+          cp -R website/dist _site/docs
+      # The badge endpoints ride along with the site, so they are served from
+      # this project's own origin rather than a coverage vendor. They stay at
+      # the ROOT rather than moving under /docs/ with the Starlight output:
+      # README.md's shields URLs name them there, and a badge that 404s renders
+      # as "invalid" rather than as an error anyone chases.
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
@@ -92,11 +113,22 @@ jobs:
           go test -coverpkg=./... -coverprofile=cover.out ./... >/dev/null
           pct=$(go tool cover -func=cover.out | tail -1 | awk '{print $3}' | tr -d '%')
           echo "go coverage: ${pct}%"
-          python3 scripts/coverage_badges.py --out website/dist --go "$pct"
+          python3 scripts/coverage_badges.py --out _site --go "$pct"
+      # The landing page carries no numbers, only placeholders. This derives
+      # them from docs/parity.md and docs/witnesses.json, writes them beside
+      # the page, and FAILS if the page has stopped being bound to either
+      # manifest or has grown a headline number written by hand.
+      #
+      # AFTER assembly, because the assembled tree is what is served: a link
+      # from the landing page into the docs is only resolvable once both halves
+      # sit in one directory, and the docs' base path moved when they did,
+      # which is the change that 404s silently if it is got wrong.
+      - name: The landing page is bound to its manifests, and its links resolve
+        run: python3 scripts/build_landing_data.py --out _site --site _site
       - uses: actions/upload-pages-artifact@v5
         if: github.event_name != 'pull_request'
         with:
-          path: website/dist
+          path: _site
 
   deploy:
     name: Deploy to GitHub Pages

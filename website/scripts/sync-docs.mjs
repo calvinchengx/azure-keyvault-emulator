@@ -14,7 +14,9 @@ const here = dirname(fileURLToPath(import.meta.url));
 const REPO = join(here, '..', '..');
 const DOCS_SRC = join(REPO, 'docs');
 const OUT = join(here, '..', 'src', 'content', 'docs');
-export const BASE = '/azure-keyvault-emulator/';
+// Must match `base` in astro.config.mjs. The docs sit under /docs/ because
+// the site root is the hand-written landing page.
+export const BASE = '/azure-keyvault-emulator/docs/';
 
 // Parity version data (release tags + the live map), collected once. `version`
 // is e.g. "v0.2.0" on a tag, otherwise "latest-<short sha>".
@@ -26,7 +28,7 @@ const PARITY_RE = /(^|\/)parity\.md$/;
 // Docs are `NN-name.md` chapters, plus the un-numbered parity map.
 const DOC_RE = /^(\d{2}-.*|parity)\.md$/;
 
-// Rewrite `](./|docs/ NN-slug.md#anchor)` → `](/azure-keyvault-emulator/NN-slug/#anchor)`.
+// Rewrite `](./|docs/ NN-slug.md#anchor)` → `](/azure-keyvault-emulator/docs/NN-slug/#anchor)`.
 const LINK_RE = /\]\((?:\.\/|docs\/)?(\d{2}-[a-z0-9-]+|parity)\.md(#[^)]*)?\)/g;
 // Repo-relative links (`../docker-compose.yml`) are correct on GitHub, where /docs sits one
 // level under the repo root — but they are dead on the site, whose pages are
