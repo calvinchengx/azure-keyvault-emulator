@@ -38,9 +38,11 @@ permissions:
   contents: read
 
 jobs:
-  # THE DOCS LANE. Jobs that cannot observe a markdown file are gated on
-  # `docs_only != 'true'`; the jobs that READ the docs are not, because they
-  # must run on exactly those changes. See scripts/docs_only_change.py.
+  # THE DOCS LANE, ON PULL REQUESTS ONLY. Jobs that cannot observe a markdown
+  # file are gated on `docs_only != 'true'`; the jobs that READ the docs are
+  # not, because they must run on exactly those changes. A push to main always
+  # runs everything, whatever it touched -- see the classify step below.
+  # See scripts/docs_only_change.py.
   #
   # Ported from fabric-emulator, which worked this out first.
   changes:
@@ -67,6 +69,14 @@ jobs:
           set -euo pipefail
           # A force push and a branch's first commit both give the null sha.
           # Neither is a docs change; both run everything.
+          # THE LANE IS FOR PULL REQUESTS. Every commit on main gets the full
+          # matrix, whatever it touched; the reasoning is at the same step in
+          # ci.yml.
+          if [ "${GITHUB_EVENT_NAME}" != "pull_request" ]; then
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+            echo "event is ${GITHUB_EVENT_NAME}, not a pull request: every commit on main gets the full matrix"
+            exit 0
+          fi
           if ! git rev-parse -q --verify "$BASE^{commit}" >/dev/null; then
             echo "docs_only=false" >> "$GITHUB_OUTPUT"
             echo "base '$BASE' is not a commit here; running everything"
