@@ -53,7 +53,7 @@ endif
 # merely locate it. Override with PY= if you keep python somewhere unusual.
 PY ?= $(shell for c in python3 python py; do if "$$c" -c '' >/dev/null 2>&1; then echo "$$c"; break; fi; done)
 
-.PHONY: help doctor up down restart clean status logs ps test chain
+.PHONY: help doctor up down restart clean status logs ps test chain docs-build docs-serve
 
 help: ## Show the available targets
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -92,3 +92,52 @@ chain: ## The three-emulator secret-as-SP-credential chain (e2e/chain)
 e2e-host-routed: ## Real SDK at {name}.vault.azure.net with TLS + challenge checks ON
 	@command -v docker >/dev/null || { echo "docker is required on PATH" >&2; exit 1; }
 	python3 e2e/host-routed/run.py
+
+# ---------------------------------------------------------------------------
+# The documentation site.
+#
+# Not called `docs`: there is a docs/ DIRECTORY here, and a target sharing its
+# name is satisfied by the directory existing. `make docs` would print
+# "nothing to be done" and exit 0, which is the failure that looks like
+# success. .PHONY below would also fix it; a name that cannot collide fixes it
+# whether or not someone remembers .PHONY.
+#
+# `pnpm --filter $(DOCS_PKG) dev` is the fast inner loop for PROSE, and it is
+# not this. It is based at the docs subpath and knows nothing about the tree
+# around it, so under it the landing page does not exist, the redirect stubs do
+# not exist, and the badge endpoints the landing page fetches do not exist. Use
+# it to write a page; use `make docs-serve` before believing the site works.
+#
+# CI runs `make docs-build` and publishes exactly what it leaves in ./_site, so
+# the thing previewed here is the thing that deploys.
+DOCS_PKG  ?= azure-keyvault-emulator-docs
+DOCS_PORT ?= 8099
+# The go coverage badge needs a full `go test ./...`. It is part of the site,
+# so it is part of this target; pass GO_COVERAGE=skip when you are editing
+# prose and can live with one badge missing from the preview.
+GO_COVERAGE ?= measure
+# The interpreter CI uses, pinned. These scripts are stdlib-only, hence
+# --no-project: no environment to resolve, and a local 3.9 cannot pass
+# something 3.12 would reject.
+UVPY ?= uv run --no-project --python 3.12 python
+
+docs-build: ## Build the published site into ./_site (what CI deploys)
+	@command -v uv >/dev/null 2>&1 || { echo "uv is not on PATH: https://docs.astral.sh/uv/" >&2; exit 1; }
+	pnpm install --frozen-lockfile
+	$(UVPY) scripts/check_docs_links.py --strict
+	pnpm --filter $(DOCS_PKG) build
+	$(UVPY) scripts/assemble_site.py --self-test
+	$(UVPY) scripts/assemble_site.py --out _site
+	@# AFTER the assembler, which clears _site before it writes.
+	@if [ "$(GO_COVERAGE)" = "skip" ]; then \
+	  echo "GO_COVERAGE=skip: ./_site will be missing the go coverage badge"; \
+	else \
+	  go test -coverpkg=./... -coverprofile=cover.out ./... >/dev/null && \
+	  pct=$$(go tool cover -func=cover.out | tail -1 | awk '{print $$3}' | tr -d '%') && \
+	  echo "go coverage: $${pct}%" && \
+	  $(UVPY) scripts/coverage_badges.py --out _site --go "$$pct"; \
+	fi
+	$(UVPY) scripts/build_landing_data.py --out _site --site _site
+
+docs-serve: docs-build ## …and serve it locally at its published URLs (DOCS_PORT=8099)
+	$(UVPY) scripts/assemble_site.py --serve --site _site --port $(DOCS_PORT)
