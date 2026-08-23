@@ -7,6 +7,7 @@ on:
       - 'docs/**'
       - 'site/**'
       - 'scripts/build_landing_data.py'
+      - 'scripts/assemble_site.py'
       - 'website/**'
       - 'pnpm-lock.yaml'
       - 'pnpm-workspace.yaml'
@@ -20,6 +21,7 @@ on:
       - 'docs/**'
       - 'site/**'
       - 'scripts/build_landing_data.py'
+      - 'scripts/assemble_site.py'
       - 'website/**'
       - 'pnpm-lock.yaml'
       - 'pnpm-workspace.yaml'
@@ -90,26 +92,32 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter azure-keyvault-emulator-docs build
-      # The published site is the hand-written landing page at the root with
-      # the rendered docs beneath it, so `/` is the project's front door and
-      # every chapter lives under `/docs/`. The landing page needs no build: it
-      # is one self-contained file, and publishing it is a copy.
+      # THE LANDING PAGE AT THE ROOT, THE DOCS UNDER /docs/, and a redirect
+      # stub at every path the site published before the move. `/` is now the
+      # project's front door and every chapter lives under `/docs/`, which is
+      # the shape the rest of the family uses.
       #
       # Astro's `base` is `/azure-keyvault-emulator/docs/` for exactly this
       # layout. Change one without the other and Starlight still builds, but
       # every internal link resolves a directory too high.
-      - name: Assemble the site
+      #
+      # The assembler holds itself to website/published-routes.txt, the route
+      # list captured from the build immediately before the base changed, so an
+      # old URL that would 404 fails the deploy instead of reaching a reader.
+      #
+      # The self-test runs first: a gate nobody has watched fail is a gate
+      # nobody knows the direction of.
+      - name: Assemble the site, and prove no published URL moved
         run: |
-          set -euo pipefail
-          test -s site/index.html
-          mkdir -p _site
-          cp site/index.html _site/index.html
-          cp -R website/dist _site/docs
+          python3 scripts/assemble_site.py --self-test
+          python3 scripts/assemble_site.py --out _site
       # The badge endpoints ride along with the site, so they are served from
       # this project's own origin rather than a coverage vendor. They stay at
       # the ROOT rather than moving under /docs/ with the Starlight output:
       # README.md's shields URLs name them there, and a badge that 404s renders
       # as "invalid" rather than as an error anyone chases.
+      #
+      # AFTER the assembler, which clears _site before it writes.
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
