@@ -41,7 +41,11 @@ import sys
 
 # Everything under these is documentation for this purpose. `website/` is the
 # Astro site: its scripts, components and config exist only to render `docs/`.
-DOC_TREES = ("docs/", "website/")
+# `site/` is the hand-written landing page. It is published BY the docs-site
+# workflow and read by nothing the suite compiles or runs, so a change to it
+# can no more break the Go build than a change to docs/ can. Without this, the
+# one file most likely to be edited while polishing the docs ran all 12 jobs.
+DOC_TREES = ("docs/", "website/", "site/")
 
 # Loose files that are documentation despite living at the root. Listed rather
 # than matched by `*.md`, so a new root-level markdown file (a LICENSE-adjacent
@@ -106,6 +110,9 @@ def self_test() -> int:
     cases: list[tuple[str, bool, str]] = [
         ("M\tdocs/01-quickstart.md", True, "edited page"),
         ("M\twebsite/scripts/sync-docs.mjs", True, "the #363 change itself"),
+        ("M\tsite/index.html", True, "the landing page is prose, not code"),
+        ("M\tsite/index.html\nM\tinternal/vault/keys.go", False,
+         "one Go file alongside the landing page still runs everything"),
         ("M\tREADME.md", True, "root readme"),
         ("A\tdocs/55-new.md\nM\tREADME.md", True, "several docs"),
         ("M\tinternal/api/items.go", False, "code"),

@@ -62,7 +62,12 @@ permissions:
 # a few times a day; this repo did 12 docs-site runs in one day.
 concurrency:
   group: ${{ github.event_name == 'pull_request' && format('pages-pr-{0}', github.ref) || 'pages' }}
-  cancel-in-progress: true
+  # PR builds cancel their predecessors; only the newest matters. A main
+  # DEPLOY must never be cancelled: it leaves the published site in
+  # whatever state it reached, and a cancelled run reads as a harmless
+  # supersession in the UI. The landing page merged at 13:49 and did not
+  # appear, because the next push to main cancelled its deploy.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:

@@ -30,6 +30,13 @@ concurrency:
   group: codeql-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# Least privilege by default. `analyze` overrides this with the wider set it
+# genuinely needs. Without a default, a job that forgets its own block
+# silently inherits the repository default -- which is what raised
+# code-scanning #13 against the `changes` job.
+permissions:
+  contents: read
+
 jobs:
   # THE DOCS LANE. Jobs that cannot observe a markdown file are gated on
   # `docs_only != 'true'`; the jobs that READ the docs are not, because they
