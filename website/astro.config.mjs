@@ -3,9 +3,16 @@ import starlight from '@astrojs/starlight';
 import { remarkMermaid } from './plugins/remark-mermaid.mjs';
 
 // Project GitHub Pages site: https://calvinchengx.github.io/azure-keyvault-emulator/
+//
+// The docs are published one level down, under /docs/, because the site root
+// is the hand-written landing page in site/index.html. The workflow assembles
+// `_site/index.html` + `_site/docs/` from the two halves, so this base and
+// that layout have to be changed together: a base of `/azure-keyvault-emulator/`
+// with the docs served from /docs/ resolves every internal link and asset one
+// directory too high, and Starlight would still build cleanly.
 export default defineConfig({
   site: 'https://calvinchengx.github.io',
-  base: '/azure-keyvault-emulator/',
+  base: '/azure-keyvault-emulator/docs/',
   // remarkMermaid turns ```mermaid fences into <pre class="mermaid"> before
   // Expressive Code sees them; src/components/Head.astro renders them client-side.
   markdown: {

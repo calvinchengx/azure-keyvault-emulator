@@ -1,0 +1,584 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Azure Key Vault Emulator &middot; the data plane, on localhost</title>
+<meta name="description" content="A local emulator of the Azure Key Vault data plane in a single Go binary: secrets, real RSA and EC cryptography, real X.509 issuance, and the real Entra challenge handshake. Driven in CI by Microsoft's own SDKs in four languages.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#128273;</text></svg>">
+<style>
+:root{
+  --bg:#fbfbfa; --panel:#fff; --ink:#16181d; --muted:#5c6270; --line:#e3e5e9;
+  --accent:#0a5aa8; --accent-soft:#e4eefa;
+  --ship:#0f6f6b; --ship-bg:#e6f2f1;
+  --wip:#8a5a00; --wip-bg:#fdf3e0;
+  --plan:#5c6270; --plan-bg:#eef0f3;
+  --stop:#a32b2b; --stop-bg:#fbeaea;
+  --code:#f4f5f7;
+  --radius:14px;
+  --font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#0f1115; --panel:#151920; --ink:#e8eaee; --muted:#98a0ae; --line:#262b34;
+    --accent:#79b0f0; --accent-soft:#152238;
+    --ship:#4fd1c5; --ship-bg:#12292b;
+    --wip:#e0a94a; --wip-bg:#2a2114;
+    --plan:#98a0ae; --plan-bg:#1c212a;
+    --stop:#f08a8a; --stop-bg:#2b1717;
+    --code:#11151b;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);
+  line-height:1.65;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1000px;margin:0 auto;padding:0 24px}
+a{color:var(--accent)}
+/* Identifiers on this page are long and several are unbreakable tokens:
+   `Azure.Security.KeyVault.Certificates` is 36 characters and, left alone,
+   pushes the document wider than a 375px viewport. Inline code wraps; code
+   BLOCKS scroll inside their own <pre>, because a wrapped shell command is a
+   command nobody can copy. */
+code{font-family:var(--mono);font-size:.9em;background:var(--code);padding:.15em .4em;
+  border-radius:5px;overflow-wrap:anywhere}
+pre{background:var(--code);border:1px solid var(--line);border-radius:var(--radius);
+  padding:18px 20px;overflow-x:auto;font-family:var(--mono);font-size:.88rem;line-height:1.55}
+pre code{background:none;padding:0;overflow-wrap:normal}
+h1,h2,h3{line-height:1.25;letter-spacing:-.02em}
+h2{font-size:1.7rem;margin:0 0 8px}
+.sec{padding:60px 0;border-top:1px solid var(--line)}
+.sec>.wrap>p.lede{color:var(--muted);font-size:1.05rem;max-width:70ch;margin:0 0 32px}
+
+.hero{padding:64px 0 56px}
+.eyebrow{font-family:var(--mono);font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--accent);margin:0 0 18px}
+.hero h1{font-size:clamp(2.1rem,5.2vw,3.4rem);margin:0 0 20px;max-width:20ch}
+.hero p{font-size:1.15rem;color:var(--muted);max-width:64ch;margin:0 0 14px}
+.hero .claim{color:var(--ink);font-weight:600;border-left:3px solid var(--accent);
+  padding-left:16px;margin-top:28px;max-width:62ch}
+.cta{display:flex;gap:12px;flex-wrap:wrap;margin-top:32px}
+.btn{display:inline-block;padding:11px 20px;border-radius:10px;text-decoration:none;
+  font-weight:600;font-size:.94rem;border:1px solid var(--line)}
+.btn.primary{background:var(--accent);color:var(--bg);border-color:var(--accent)}
+.btn.ghost{color:var(--ink)}
+.release-pill{display:inline-flex;align-items:center;gap:9px;margin:0 0 20px;padding:6px 14px;
+  border:1px solid var(--line);border-radius:999px;background:var(--panel);
+  text-decoration:none;color:var(--muted);font-size:.86rem}
+.release-pill span{background:var(--accent-soft);color:var(--accent);font-weight:700;
+  border-radius:999px;padding:2px 9px;font-size:.78rem}
+
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;
+  background:var(--line);border:1px solid var(--line);border-radius:var(--radius);
+  overflow:hidden;margin-top:44px}
+.stat{background:var(--panel);padding:20px}
+.stat b{display:block;font-size:1.65rem;letter-spacing:-.03em}
+.stat span{color:var(--muted);font-size:.83rem}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:24px}
+.card h3{font-size:1.08rem;margin:0 0 10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.card p{margin:0 0 12px;color:var(--muted);font-size:.94rem}
+.card .ev{font-family:var(--mono);font-size:.78rem;color:var(--ink);background:var(--code);
+  border-radius:8px;padding:9px 12px;display:block;overflow-wrap:anywhere}
+.tag{font-size:.68rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;
+  padding:3px 9px;border-radius:999px;white-space:nowrap}
+.t-ship{color:var(--ship);background:var(--ship-bg)}
+.t-wip{color:var(--wip);background:var(--wip-bg)}
+.t-plan{color:var(--plan);background:var(--plan-bg)}
+.t-stop{color:var(--stop);background:var(--stop-bg)}
+
+.tbl{width:100%;border-collapse:collapse;font-size:.92rem;margin-top:8px}
+.tbl th,.tbl td{text-align:left;padding:11px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+.tbl th{font-size:.75rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600}
+.tbl td:first-child{font-weight:600}
+.scroll{overflow-x:auto}
+
+.note{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--accent);
+  border-radius:0 var(--radius) var(--radius) 0;padding:20px 24px;margin-top:28px}
+.note b{display:block;margin-bottom:6px}
+.note p{margin:0;color:var(--muted);font-size:.94rem}
+.note.warn{border-left-color:var(--stop)}
+footer{padding:44px 0 60px;border-top:1px solid var(--line);color:var(--muted);font-size:.88rem}
+footer a{text-decoration:none}
+
+.topnav{position:sticky;top:0;z-index:50;background:color-mix(in srgb,var(--bg) 88%,transparent);
+  backdrop-filter:saturate(1.4) blur(8px);border-bottom:1px solid var(--line)}
+.topnav .wrap{display:flex;align-items:center;gap:18px;height:56px}
+.topnav .brand{font-family:var(--mono);font-size:.82rem;letter-spacing:.04em;
+  text-transform:uppercase;color:var(--ink);text-decoration:none;font-weight:600}
+.topnav .links{margin-left:auto;display:flex;gap:18px;align-items:center;flex-wrap:wrap}
+.topnav .links a{color:var(--muted);text-decoration:none;font-size:.92rem}
+.topnav .links a:hover{color:var(--accent)}
+.topnav .links a.strong{color:var(--accent);font-weight:600}
+@media (max-width:640px){.topnav .links a:not(.strong){display:none}}
+</style>
+</head>
+<body>
+
+<nav class="topnav">
+  <div class="wrap">
+    <a class="brand" href="./">Key Vault Emulator</a>
+    <div class="links">
+      <a href="./#evidence">Evidence</a>
+      <a href="./#status">Honest status</a>
+      <a href="./#release">Get it</a>
+      <a href="./#start">Run it</a>
+      <a href="https://github.com/calvinchengx/azure-keyvault-emulator">GitHub</a>
+      <a class="strong" href="docs/">Documentation &rarr;</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="eyebrow">azure-keyvault-emulator</p>
+    <a class="release-pill" href="https://github.com/calvinchengx/azure-keyvault-emulator/releases/latest"><span>v0.7.0</span> Three defects in rows the ledger already graded green, found by pointing Microsoft's Python SDK at them &rarr;</a>
+    <h1>Point a real Azure SDK at a vault on your laptop.</h1>
+    <p>Secrets, keys and certificates, served at Azure Key Vault's own wire
+       protocol from a single Go binary. Real RSA and EC keys doing real signing,
+       encryption and wrapping. Real X.509 issuance. Nothing pretended, and
+       nothing that pretends is graded as though it were.</p>
+    <p>Authentication is not a pass-through. A tokenless call gets the real
+       <code>401</code> challenge, and the token the SDK brings back is verified
+       against entra-emulator's JWKS: signature first, then issuer, audience and
+       expiry. <code>DefaultAzureCredential</code> walks the same two steps here
+       that it walks in production, so your tests exercise the credential path
+       and not just the storage path.</p>
+    <p class="claim">Every number on this page is counted from this repository's
+       own parity ledger and witness manifest when the site is built, including
+       the <b><span id="go-count">&mdash;</span> claims that still rest on our
+       own tests alone</b>.</p>
+    <div class="cta">
+      <a class="btn primary" href="docs/01-quickstart/">Quick start</a>
+      <a class="btn ghost" href="https://github.com/calvinchengx/azure-keyvault-emulator">Source on GitHub</a>
+      <a class="btn ghost" href="#evidence">How it is proved</a>
+      <a class="btn ghost" href="#status">What it will not do</a>
+    </div>
+    <div class="stats">
+      <div class="stat"><b id="green-count">&mdash;</b><span>capability claims graded real</span></div>
+      <div class="stat"><b id="ci-count">&mdash;</b><span>proved by a packaged Microsoft SDK in CI</span></div>
+      <div class="stat"><b id="sdk-count">&mdash;</b><span>proved by Azure's Go SDK in process</span></div>
+      <div class="stat"><b id="go-count-2">&mdash;</b><span>resting on our own tests alone</span></div>
+      <div class="stat"><b id="job-count">&mdash;</b><span>CI jobs named as witnesses</span></div>
+      <div class="stat"><b id="scope-count">&mdash;</b><span>rows ruled out of scope</span></div>
+    </div>
+  </div>
+</header>
+
+<section class="sec">
+  <div class="wrap">
+    <h2>The problem this solves</h2>
+    <p class="lede">A vault is the first dependency an application acquires and
+      the one it can least easily fake. Three costs follow, and the third is the
+      expensive one.</p>
+    <div class="grid">
+      <div class="card">
+        <h3>A vault nobody can give you</h3>
+        <p>Working on secrets needs a vault, a role assignment on it, a principal
+           to hold that role, and someone with rights to create all three. Purge
+           protection and soft-delete retention are decisions made once, per
+           vault, by somebody else. So the code that reads secrets is the code
+           that never gets exercised locally.</p>
+        <span class="ev">One binary, a seeded vault, and a reset in one call</span>
+      </div>
+      <div class="card">
+        <h3>Stand-ins that skip the handshake</h3>
+        <p>Most local Key Vault substitutes accept any token, or serve a token
+           endpoint that agrees with anything. The credential path is then the
+           one part of the system your suite has no opinion about, and it is the
+           part that fails in the deployed environment.</p>
+        <span class="ev">Real RS256 validation against a real issuer's JWKS</span>
+      </div>
+      <div class="card">
+        <h3>Fakes you wrote both ends of</h3>
+        <p>A hand-rolled vault agrees with the client written against it. Ours
+           did too: our own tests parsed <code>nextLink</code> rather than
+           following it, so a pager that no Microsoft SDK could walk stayed green
+           through four releases. Microsoft's Python SDK found it, and two more
+           beside it, in rows already graded real.</p>
+        <span class="ev">docs/release-notes/v0.7.0.md</span>
+      </div>
+    </div>
+    <div class="note">
+      <b>The handshake, in full.</b>
+      <p>Nothing in this sequence is shortened for the emulator. The vault does
+        not know how to mint a token, and the issuer does not know what a vault
+        is.</p>
+    </div>
+<pre><code>Azure SDK (SecretClient / azsecrets)
+   1. unauthenticated probe
+      -&gt; azure-keyvault-emulator answers 401 WWW-Authenticate: Bearer
+         authorization="{entra authority}", resource="https://vault.azure.net"
+   2. SDK acquires a token from the advertised authority
+      -&gt; entra-emulator mints aud=https://vault.azure.net
+   3. SDK retries with the token
+      -&gt; signature checked against entra's JWKS, then iss, aud, exp -&gt; 200</code></pre>
+  </div>
+</section>
+
+<section class="sec" id="evidence">
+  <div class="wrap">
+    <h2>How a claim earns its grade</h2>
+    <p class="lede">Real Azure Key Vault is the sole reference, approached from
+      two directions: Microsoft's published REST documentation says what the
+      service does, and Microsoft's own client libraries, pinned and run in CI,
+      witness that this emulator does the same. Every row graded real names the
+      test or CI job that proves it, and CI fails when one goes missing.</p>
+    <div class="scroll">
+      <table class="tbl">
+        <thead><tr><th>Witness tier</th><th>What it means</th><th>Claims credited</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><code>ci:</code></td>
+            <td>A CI job driving a packaged Microsoft client from its own package
+                manager, over a network, against the running emulator. The
+                strongest evidence here, because nothing in the loop is ours.</td>
+            <td><b id="ci-count-2">&mdash;</b></td>
+          </tr>
+          <tr>
+            <td><code>sdk:</code></td>
+            <td>A Go test in which Azure's own client does the talking:
+                <code>azsecrets</code>, <code>azkeys</code>,
+                <code>azcertificates</code> over the vault's wire. Third-party
+                evidence, but in process rather than a released package over a
+                network, so it ranks below <code>ci:</code>.</td>
+            <td><b id="sdk-count-2">&mdash;</b></td>
+          </tr>
+          <tr>
+            <td><code>go:</code></td>
+            <td>Our own Go tests: real HTTP, real signed JWTs, real
+                authorization, but our client on both ends of our own
+                implementation. It proves the emulator agrees with itself.</td>
+            <td><b id="go-count-3">&mdash;</b></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="lede" style="margin-top:28px">Each claim is credited once, by its
+      strongest witness, so the tiers above add up to the whole ledger. Counting
+      citations instead would flatter every row, because one claim often carries
+      four or five witnesses.</p>
+    <div class="grid">
+      <div class="card">
+        <h3>Microsoft's own SDKs <span class="tag t-ship">witnessed</span></h3>
+        <p>Python, JavaScript and .NET suites run the same surface on three
+           operating systems each: challenge authentication, the secret
+           lifecycle through soft-delete and purge, RSA cryptography with a
+           tamper negative, on-demand rotation, a <code>key_ops</code> refusal,
+           and a self-signed certificate operation polled to completion.</p>
+        <span class="ev">ci:python-sdk &middot; ci:js-sdk &middot; ci:dotnet-sdk</span>
+      </div>
+      <div class="card">
+        <h3>The Go SDK as a borrowed oracle <span class="tag t-ship">witnessed</span></h3>
+        <p>The Go suite reconstructs an <code>*rsa.PublicKey</code> from the
+           returned JWK and verifies an SDK-produced signature <em>outside</em>
+           the SDK, with a tampered-signature negative alongside. A round trip
+           that only checks itself would pass on two broken halves.</p>
+        <span class="ev">sdk:TestAzkeysRSALifecycleAndCrypto</span>
+      </div>
+      <div class="card">
+        <h3>A vault at its real hostname <span class="tag t-ship">witnessed</span></h3>
+        <p>One job reaches the vault at <code>https://contoso.vault.azure.net</code>
+           with the SDK's challenge-resource check left <em>on</em>, which the
+           localhost suites have to disable, and verifies the TLS chain rather
+           than skipping it. The wildcard SAN is load-bearing: remove it and the
+           suite fails by name.</p>
+        <span class="ev">ci:host-routed</span>
+      </div>
+      <div class="card">
+        <h3>The rest of the family <span class="tag t-ship">witnessed</span></h3>
+        <p>A chain job stores a service principal's secret in the vault, reads it
+           back with a managed-identity token that carries no credential, uses
+           that secret to authenticate to entra-emulator, and calls
+           fabric-emulator with the result. Three real processes, and a wrong
+           secret breaks it exactly where Azure would.</p>
+        <span class="ev">ci:chain &middot; ci:arm-chain &middot; ci:az-cli</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="sec">
+  <div class="wrap">
+    <h2>What it does</h2>
+    <p class="lede">Grades and evidence lines below are the ledger's own, not a
+      summary written for this page. The full table, with the reasoning for each
+      row, is the <a href="docs/parity/">parity map</a>.</p>
+    <div class="grid">
+      <div class="card">
+        <h3>Secrets <span class="tag t-ship">real</span></h3>
+        <p>Set, get, list, list versions and get by version, with a new 32-hex
+           version minted on every write. <code>enabled</code> is enforced;
+           <code>nbf</code> and <code>exp</code> behave as real Key Vault does.
+           Backup produces an opaque sealed blob restorable only by the same
+           instance, which is the honest analogue of the same-geography rule.</p>
+        <span class="ev">ci:python-sdk &middot; ci:js-sdk &middot; ci:dotnet-sdk</span>
+      </div>
+      <div class="card">
+        <h3>Keys, doing real cryptography <span class="tag t-ship">real</span></h3>
+        <p>RSA 2048/3072/4096 and EC P-256/P-384/P-521 generated with
+           <code>crypto/rsa</code> and <code>crypto/ecdsa</code>. Sign and verify
+           across RS, PS and ES families, with Azure's raw <code>r&#8214;s</code>
+           encoding. Encrypt, decrypt, wrap, unwrap, JWK import, rotation on the
+           emulator clock, and <code>key_ops</code> enforced with a
+           <code>403</code>.</p>
+        <span class="ev">sdk:TestAzkeysECSignVerify &middot; ci:python-sdk</span>
+      </div>
+      <div class="card">
+        <h3>Certificates <span class="tag t-ship">real</span></h3>
+        <p>Self-signed issuance through <code>x509.CreateCertificate</code>,
+           PKCS#12 and PEM import, a real PKCS#10 CSR for a named issuer, and a
+           merge that verifies the signed leaf's public key against the pending
+           key before accepting it. The linked key and secret materialise under
+           the same name, as they do in Azure.</p>
+        <span class="ev">sdk:TestAzcertificatesSelfSignedLifecycle &middot; sdk:TestAzcertificatesMerge</span>
+      </div>
+      <div class="card">
+        <h3>Challenge authentication <span class="tag t-ship">real</span></h3>
+        <p>The <code>401</code> carries Key Vault's own <code>AKV10000</code>
+           code and points at entra-emulator's authority. Signatures are checked
+           before any claim is read; issuer, audience and validity follow, on a
+           clock you can move. Several trusted issuers are allowed at once, each
+           validating against its own JWKS.</p>
+        <span class="ev">ci:host-routed &middot; ci:chain</span>
+      </div>
+      <div class="card">
+        <h3>Soft delete and recovery <span class="tag t-ship">real</span></h3>
+        <p>Delete, list deleted, recover and purge as an enforced state machine,
+           with retention validated between 7 and 90 days and name reuse refused
+           with <code>409</code> while an object is still deleted. Retention
+           expiry is genuinely clock-driven rather than announced.</p>
+        <span class="ev">sdk:TestAzureSDKChallengeFlowAndSecretLifecycle &middot; ci:js-sdk</span>
+      </div>
+      <div class="card">
+        <h3>Authorization, governed by ARM <span class="tag t-ship">real</span></h3>
+        <p>By default the sibling arm-emulator governs:
+           <code>az role assignment create</code> and
+           <code>az keyvault set-policy</code> write over ARM's real wire and
+           this data plane enforces the result, no-assignment-means-no-access
+           included. A group grant authorises any caller carrying that group.</p>
+        <span class="ev">ci:arm-chain &middot; ci:az-cli</span>
+      </div>
+      <div class="card">
+        <h3>Vault addressing and TLS <span class="tag t-ship">real</span></h3>
+        <p>The <code>Host</code> header selects the vault, object identifiers are
+           always rendered canonically whatever the listen address, and the
+           self-signed material covers <code>*.vault.azure.net</code> with a
+           stable fingerprint across restarts. Paging is capped at 25 with a
+           <code>nextLink</code> the SDK pagers can actually follow.</p>
+        <span class="ev">ci:host-routed &middot; go:TestVaultNameResolution</span>
+      </div>
+      <div class="card">
+        <h3>Secure Key Release <span class="tag t-wip">emulated</span></h3>
+        <p><code>exportable</code> is enforced and a non-exportable key refuses
+           release, the release policy round-trips, and the JWS is genuinely
+           signed. There is no attestation, because there is no enclave to
+           attest. That is why the row is amber and not green.</p>
+        <span class="ev">docs/parity.md, Keys section</span>
+      </div>
+      <div class="card">
+        <h3>Issuance by a real CA <span class="tag t-plan">bring your own engine</span></h3>
+        <p>The emulator generates the key and a real CSR and merges whatever
+           chain your CA signs. Attach a real CA and the X.509 is real; attach
+           nothing and this row is a contract only. Live DigiCert and GlobalSign
+           integrations are out of scope.</p>
+        <span class="ev">go:TestCertMergeFlow &middot; sdk:TestAzcertificatesMerge</span>
+      </div>
+      <div class="card">
+        <h3>Testing controls <span class="tag t-plan">no Azure equivalent</span></h3>
+        <p>A controllable clock at <code>/_emulator/clock</code> makes token
+           expiry and retention windows deterministic, fault injection forces
+           <code>429</code> with <code>Retry-After</code> or <code>500</code> for
+           the next few requests, and a read-only portal shows vault state in a
+           browser. These exist for tests and have no Key Vault counterpart.</p>
+        <span class="ev">http://localhost:8444/_emulator/portal/</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="status">
+  <div class="wrap">
+    <h2>Honest status</h2>
+    <p class="lede">The counts below come from the same manifests as the
+      flattering ones at the top of the page, so they cannot be the half that
+      goes stale.</p>
+    <div class="note warn">
+      <b>Nothing here has ever been run against a live Azure Key Vault.</b>
+      <p>There is no differential test against a real vault, and no credentials
+        for one. The reference is Microsoft's published REST documentation plus
+        Microsoft's own client libraries, pinned and executed in CI. Those
+        libraries are strong evidence about the wire, and no evidence at all
+        about behaviour they never exercise. Read every grade on this page as
+        "agrees with the documentation and with Microsoft's clients", not as
+        "checked against Azure".</p>
+    </div>
+    <div class="note">
+      <b><span id="go-count-4">&mdash;</span> claims are still witnessed by our own tests alone.</b>
+      <p>Named, because a claim proved only by the code that implements it proves
+        that the emulator agrees with itself: <span id="go-only-claims">&mdash;</span>.
+        Everything else in the ledger is carried by a Microsoft client.</p>
+    </div>
+    <div class="note">
+      <b><span id="partial-count">&mdash;</span> rows are not graded real, and say so.</b>
+      <p>Secure Key Release is emulated, since no enclave exists to attest.
+        Assignment through the <code>/_emulator</code> control surface is
+        emulated, because it is real enforcement over a wire that is not ARM's.
+        Certificate issuance by a real CA is contract-only until you attach a
+        CA.</p>
+    </div>
+    <h3 style="margin-top:36px">Out of scope, deliberately</h3>
+    <p class="lede">The line is drawn around the vault. Everything below is the
+      infrastructure surrounding it, which no process on a laptop can honestly
+      provide. There are no <code>501</code> stubs in this emulator: an
+      unimplemented feature has no route, so a client sees a
+      <code>404</code>.</p>
+    <div class="scroll">
+      <table class="tbl">
+        <thead><tr><th>Azure feature</th><th>Status</th><th>Why</th></tr></thead>
+        <tbody>
+          <tr><td>ARM control plane</td><td><span class="tag t-stop">not implemented</span></td><td>Creating and deleting vaults is a different plane. This serves the data plane a vault client talks to; the sibling arm-emulator serves the other one.</td></tr>
+          <tr><td>Managed HSM</td><td><span class="tag t-stop">not implemented</span></td><td>A distinct service and a hardware trust boundary. Returning software material under an HSM name would tell a caller their keys are hardware-backed when they are not.</td></tr>
+          <tr><td>Private endpoints, firewall, network ACLs</td><td><span class="tag t-stop">not implemented</span></td><td>Network topology, not vault behaviour.</td></tr>
+          <tr><td>Customer-managed-key encryption of the vault itself</td><td><span class="tag t-stop">not implemented</span></td><td>Infrastructure level.</td></tr>
+          <tr><td>Real CA issuance (DigiCert, GlobalSign)</td><td><span class="tag t-stop">not implemented</span></td><td>Needs a real CA. The bring-your-own-engine CSR and merge path above is the substitute.</td></tr>
+          <tr><td>Diagnostic logs, Event Grid, metrics</td><td><span class="tag t-stop">not implemented</span></td><td>An Azure Monitor surface, not a vault surface.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note warn">
+      <b>Intentionally insecure, and not a security boundary.</b>
+      <p>Publicly known seeded principals and secrets, self-signed TLS, an open
+        <code>/_emulator</code> control surface that can move the clock and
+        rewrite permissions. It exists so a laptop can serve a vault that behaves
+        closely enough to develop against. Run it on <code>localhost</code>.
+        Never point real secrets at it.</p>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="release">
+  <div class="wrap">
+    <h2>Get it</h2>
+    <p class="lede">A distroless image with a built-in healthcheck, or a static
+      binary for six platform pairs across Linux, macOS and Windows. Pure Go, no
+      cgo, no runtime dependency.</p>
+<pre><code>brew install calvinchengx/tap/azure-keyvault-emulator      # macOS and Linux
+winget install calvinchengx.azure-keyvault-emulator        # Windows
+go install github.com/calvinchengx/azure-keyvault-emulator/cmd/azure-keyvault-emulator@latest
+
+docker run -p 8444:8444 ghcr.io/calvinchengx/azure-keyvault-emulator:latest</code></pre>
+    <p class="lede" style="margin-top:24px">The vault on its own has no issuer to
+      trust, so the useful unit is the pair. The repository's
+      <code>docker-compose.yml</code> wires the challenge to entra-emulator's
+      authority and points token validation at its JWKS, with no configuration
+      to write. Every install method is in
+      <a href="docs/02-installation/">installation</a>, and the prerequisites per
+      platform are in <a href="docs/14-platform-setup/">platform setup</a>.</p>
+  </div>
+</section>
+
+<section class="sec" id="start">
+  <div class="wrap">
+    <h2>Run it</h2>
+    <p class="lede">Three verbs, the same on Linux, macOS and Windows.</p>
+<pre><code>make doctor   # toolchain and docker context check, run this first
+make up       # entra-emulator :8443 and keyvault-emulator :8444
+make status   # is the pair usable? containers, endpoints, the 401 challenge</code></pre>
+    <p class="lede" style="margin-top:28px">Then point a real client at it. Only
+      the vault URL and the authority change; the seeded application values below
+      are public development credentials from entra-emulator's deterministic
+      seed, so a fixture written today still resolves next year.</p>
+<pre><code>import os
+from azure.identity import DefaultAzureCredential, DefaultAzureCredentialOptions
+from azure.keyvault.secrets import SecretClient
+
+os.environ["AZURE_TENANT_ID"]      = "6f89cf12-978b-4d23-ac18-9ef0c127cf87"
+os.environ["AZURE_CLIENT_ID"]      = "00d88624-f0d7-46f6-a641-6232c2608928"
+os.environ["AZURE_CLIENT_SECRET"]  = "daemon-app-secret"
+os.environ["AZURE_AUTHORITY_HOST"] = "https://localhost:8443"
+
+cred = DefaultAzureCredential(
+    DefaultAzureCredentialOptions(disable_instance_discovery=True))
+
+client = SecretClient(
+    vault_url="https://localhost:8444",
+    credential=cred,
+    # localhost is not *.vault.azure.net, so the challenge-resource check is
+    # relaxed here. Addressing the vault by its real hostname does not need it.
+    disable_challenge_resource_verification=True,
+    connection_verify=False,   # self-signed certificate, local only
+)
+
+client.set_secret("db-password", "hunter2")
+print(client.get_secret("db-password").value)   # -&gt; hunter2</code></pre>
+    <p class="lede" style="margin-top:28px">The Go, JavaScript and .NET clients
+      work the same way. The handshake is described in detail under
+      <a href="docs/09-authentication/">authentication</a>, the family wiring
+      under <a href="docs/11-family-integration/">family integration</a>, and how
+      all of this is tested under <a href="docs/10-testing/">testing</a>.</p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p><a href="https://github.com/calvinchengx/azure-keyvault-emulator">github.com/calvinchengx/azure-keyvault-emulator</a>
+       &middot; Apache 2.0 &middot; <a href="docs/12-roadmap/">roadmap</a> &middot;
+       <a href="docs/parity/">parity map</a> &middot;
+       <a href="docs/">documentation</a></p>
+    <p>Part of an emulator family that shares one issuer:
+       <a href="https://github.com/calvinchengx/entra-emulator">entra-emulator</a> mints the tokens,
+       <a href="https://github.com/calvinchengx/arm-emulator">arm-emulator</a> governs the vault resource, and
+       <a href="https://github.com/calvinchengx/fabric-emulator">fabric-emulator</a> consumes vault-backed connections.
+       <a href="https://github.com/calvinchengx/azure-emulators">azure-emulators</a> runs them together.</p>
+    <p>An independent developer tool, not affiliated with or endorsed by
+       Microsoft. "Azure", "Azure Key Vault" and "Microsoft Entra ID" are
+       Microsoft trademarks. This project emulates publicly documented protocol
+       behaviour for local development and testing only.</p>
+  </div>
+</footer>
+
+<script>
+  // Every number on this page is read at build time from the repository's own
+  // manifests: docs/parity.md grades the rows, docs/witnesses.json names the
+  // evidence, and scripts/build_landing_data.py reduces both to the file
+  // fetched below and copied beside this page.
+  //
+  // Nothing is typed into the markup, because a typed number has no idea a
+  // witness was added or a row was regraded. This repository's own README
+  // demonstrates the failure: its parity summary was written by hand and no
+  // longer matches the ledger it summarises.
+  //
+  // The fallback is the em dash already in the markup. If the manifest cannot
+  // be read, the page says nothing rather than something possibly untrue.
+  fetch('landing-data.json')
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (d) {
+      if (!d) { return; }
+      var set = function (id, value) {
+        var el = document.getElementById(id);
+        if (el && value !== undefined && value !== null) { el.textContent = value; }
+      };
+      set('green-count', d.claims);
+      set('ci-count', d.by_tier.ci);
+      set('ci-count-2', d.by_tier.ci);
+      set('sdk-count', d.by_tier.sdk);
+      set('sdk-count-2', d.by_tier.sdk);
+      set('go-count', d.by_tier.go);
+      set('go-count-2', d.by_tier.go);
+      set('go-count-3', d.by_tier.go);
+      set('go-count-4', d.by_tier.go);
+      set('job-count', d.ci_jobs);
+      // The counterweights come from the same read as the flattering numbers.
+      set('scope-count', d.out_of_scope);
+      set('partial-count', d.grades.emulated + d.grades['byo-engine']);
+      // Named, not just counted: d.go_only tells a reader how many claims rest
+      // on our own tests, and which ones they are.
+      var el = document.getElementById('go-only-claims');
+      if (el && d.go_only && d.go_only.length) { el.textContent = d.go_only.join('; '); }
+    })
+    .catch(function () {});
+</script>
+</body>
+</html>

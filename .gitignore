@@ -34,3 +34,8 @@ __pycache__/
 # .NET build output from the e2e SDK witness suite
 e2e/sdk/dotnet/bin/
 e2e/sdk/dotnet/obj/
+
+# Assembled Pages output: the landing page at the root with website/dist under
+# docs/. Built by .github/workflows/docs-site.yml and by hand when checking the
+# links across that seam; never committed.
+/_site/
