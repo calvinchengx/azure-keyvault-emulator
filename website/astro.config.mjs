@@ -22,6 +22,10 @@ export default defineConfig({
     starlight({
       title: 'Azure Key Vault Emulator',
       components: {
+        // A back-link to the landing page beside the site title. The
+        // component explains why it cannot live in the header icon row
+        // or the sidebar, and computes its href from the configured base.
+        SiteTitle: './src/components/SiteTitle.astro',
         Head: './src/components/Head.astro',
         // Top nav: the parity version picker, rendered beside the search box.
         Search: './src/components/Search.astro',
