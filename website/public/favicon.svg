@@ -1,6 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-  <!-- The same mark the landing page carries inline (site/index.html). Starlight
-       defaults its <link rel="icon"> to /favicon.svg and does NOT check that the
-       file exists, so without this every published doc page 404s its icon. -->
-  <text y=".9em" font-size="90">&#128273;</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="Azure Keyvault Emulator">
+  <!-- The same 🔑 the landing page carries as an inline data: URI, and the same
+       accent (#0a5aa8), so the two surfaces read as one site in a tab strip.
+       Drawn as paths rather than a <text>🔑</text> glyph: a glyph renders only
+       where the font has it, and a favicon is exactly where that degrades
+       silently to a blank square. Reasoning from data-agent-service 9c280e5,
+       which fixed the same thing. -->
+  <rect width="100" height="100" rx="18" fill="#0a5aa8"/>
+  <g fill="none" stroke="#fff" stroke-width="8" stroke-linecap="round"><circle cx="33" cy="50" r="13"/><path d="M46 50H84"/><path d="M66 50v13"/><path d="M78 50v13"/></g>
 </svg>
