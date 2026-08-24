@@ -109,35 +109,17 @@ function convert(name) {
   return frontmatter + body;
 }
 
-function writeIndex() {
-  const body = rewriteLinks(
-    `Local emulator of the **Azure Key Vault data plane** in a single Go binary — ` +
-      `secrets, keys (real RSA/EC cryptography), and certificates (self-signed + PFX/PEM import), ` +
-      `with versioning and soft delete on a controllable clock. Unlike pass-through emulators, ` +
-      `**authentication is the point**: the 401 challenge advertises a real Entra authority and ` +
-      `every token is validated for signature, issuer, vault audience, and expiry against ` +
-      `[entra-emulator](https://calvinchengx.github.io/entra-emulator/)'s JWKS — so ` +
-      `\`DefaultAzureCredential\` walks the same path it walks in production, and the real ` +
-      `\`azsecrets\` / \`azkeys\` / \`azcertificates\` SDKs authenticate against it exactly as ` +
-      `against Azure.\n\n` +
-      `:::caution\nLocal development tool only — intentionally insecure (self-signed TLS, no real ` +
-      `authorization boundary by default). It emulates the data-plane **contract**, not a security ` +
-      `boundary. Run it on \`localhost\` only.\n:::\n\n` +
-      `## Start here\n\n` +
-      `- [Quickstart](01-quickstart.md) — compose up the pair, mint a token, read and write a secret\n` +
-      `- [Installation](02-installation.md) — brew, winget, go install, Docker, compose\n` +
-      `- [Architecture](03-architecture.md) — the challenge-auth trust model and why it matters\n` +
-      `- [Secrets](06-secrets.md) · [Keys](07-keys.md) · [Certificates](08-certificates.md) — the data-plane reference\n` +
-      `- [Authentication](09-authentication.md) — the challenge handshake, credential paths, the permission map\n` +
-      `- [Testing](10-testing.md) — freeze the clock, inject throttling; [the three-emulator chain](11-family-integration.md)\n` +
-      `- [Roadmap](12-roadmap.md) — phases P0–P3 and what's next\n`,
-  );
-  // The landing page is synthesized here (no /docs source), so it has no
-  // "Edit this page" target.
-  const frontmatter =
-    `---\ntitle: Azure Key Vault Emulator\ndescription: A local emulator of the Azure Key Vault data plane with real challenge-based authentication.\neditUrl: false\n---\n\n`;
-  writeFileSync(join(OUT, 'index.md'), frontmatter + body);
-}
+// NO writeIndex() ANY MORE, and this note is here so its absence reads as a
+// decision rather than an omission.
+//
+// The docs root is `website/src/pages/index.astro` now -- the landing page,
+// served both at the site root and at the docs base from ONE build output. An
+// index.md here would have claimed the same route and collided with it.
+//
+// Its curated chapter list was not lost: it moved onto that page, under #docs.
+// Keeping both is the arrangement fabric-emulator had, where a hand-written
+// root page and an Astro page under /docs/ said the same thing separately and
+// drifted until one advertised a release that did not exist.
 
 rmSync(OUT, { recursive: true, force: true });
 mkdirSync(OUT, { recursive: true });
@@ -145,7 +127,6 @@ const names = readdirSync(DOCS_SRC).filter((n) => DOC_RE.test(n)).sort();
 for (const name of names) {
   writeFileSync(join(OUT, name), convert(name));
 }
-writeIndex();
 const info = writeParityHistory(OUT, PARITY, { convertBody });
 // The top-nav picker is an Astro component and can't shell out to git, so hand
 // it the same points as a build-time manifest.
