@@ -1,3 +1,28 @@
+---
+// The landing page, as an Astro page rather than a hand-written file.
+//
+// WHY IT MOVED. It used to be site/index.html, copied to the site root by
+// scripts/assemble_site.py and seen by nothing else -- not the Astro build,
+// not `astro dev`, not a single check that protects the docs.
+// fabric-emulator ran the two-surface version of this and its assembler
+// records how it ended: a hand-written root page and an Astro page under
+// /docs/ drifted until the version pill read "unreleased" on a repository with
+// 33 tags. One source now, served at BOTH doors from one build output.
+//
+// THE RULE THAT MAKES ONE FILE CORRECT AT TWO DEPTHS: nothing here may be
+// page-relative. This exact file is served at /azure-keyvault-emulator/ AND at
+// /azure-keyvault-emulator/docs/, so `href="docs/parity/"` resolves to two
+// different places and is wrong at one of them. Every link and every fetch
+// goes through one of the two absolute prefixes below.
+//
+//   base -- where the DOCS live:    /azure-keyvault-emulator/docs/
+//   root -- where the SITE root is: /azure-keyvault-emulator/
+//
+// `root` is derived by stripping the trailing `docs/`, the same idiom
+// SiteTitle.astro uses for its back-link, so neither is hardcoded.
+const base = import.meta.env.BASE_URL;
+const root = base.replace(/docs\/$/, "");
+---
 <!doctype html>
 <html lang="en">
 <head>
@@ -131,20 +156,23 @@ footer a{text-decoration:none}
 .topnav .links a:hover{color:var(--accent)}
 .topnav .links a.strong{color:var(--accent);font-weight:600}
 @media (max-width:640px){.topnav .links a:not(.strong){display:none}}
+.chapters{list-style:none;padding:0;display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+.chapters a{display:block;padding:12px 14px;border:1px solid var(--line,#e3e5e9);border-radius:10px;text-decoration:none}
+.chapters b{display:block}
 </style>
 </head>
 <body>
 
 <nav class="topnav">
   <div class="wrap">
-    <a class="brand" href="./">Key Vault Emulator</a>
+    <a class="brand" href={root}>Key Vault Emulator</a>
     <div class="links">
-      <a href="./#evidence">Evidence</a>
-      <a href="./#status">Honest status</a>
-      <a href="./#release">Get it</a>
-      <a href="./#start">Run it</a>
+      <a href={`${root}#evidence`}>Evidence</a>
+      <a href={`${root}#status`}>Honest status</a>
+      <a href={`${root}#release`}>Get it</a>
+      <a href={`${root}#start`}>Run it</a>
       <a href="https://github.com/calvinchengx/azure-keyvault-emulator">GitHub</a>
-      <a class="strong" href="docs/">Documentation &rarr;</a>
+      <a class="strong" href="#docs">Documentation &rarr;</a>
     </div>
   </div>
 </nav>
@@ -169,7 +197,7 @@ footer a{text-decoration:none}
        the <b><span id="go-count">&mdash;</span> claims that still rest on our
        own tests alone</b>.</p>
     <div class="cta">
-      <a class="btn primary" href="docs/01-quickstart/">Quick start</a>
+      <a class="btn primary" href={`${base}01-quickstart/`}>Quick start</a>
       <a class="btn ghost" href="https://github.com/calvinchengx/azure-keyvault-emulator">Source on GitHub</a>
       <a class="btn ghost" href="#evidence">How it is proved</a>
       <a class="btn ghost" href="#status">What it will not do</a>
@@ -228,7 +256,7 @@ footer a{text-decoration:none}
 <pre><code>Azure SDK (SecretClient / azsecrets)
    1. unauthenticated probe
       -&gt; azure-keyvault-emulator answers 401 WWW-Authenticate: Bearer
-         authorization="{entra authority}", resource="https://vault.azure.net"
+         authorization="&#123;entra authority&#125;", resource="https://vault.azure.net"
    2. SDK acquires a token from the advertised authority
       -&gt; entra-emulator mints aud=https://vault.azure.net
    3. SDK retries with the token
@@ -323,7 +351,7 @@ footer a{text-decoration:none}
     <h2>What it does</h2>
     <p class="lede">Grades and evidence lines below are the ledger's own, not a
       summary written for this page. The full table, with the reasoning for each
-      row, is the <a href="docs/parity/">parity map</a>.</p>
+      row, is the <a href={`${base}parity/`}>parity map</a>.</p>
     <div class="grid">
       <div class="card">
         <h3>Secrets <span class="tag t-ship">real</span></h3>
@@ -493,8 +521,8 @@ docker run -p 8444:8444 ghcr.io/calvinchengx/azure-keyvault-emulator:latest</cod
       <code>docker-compose.yml</code> wires the challenge to entra-emulator's
       authority and points token validation at its JWKS, with no configuration
       to write. Every install method is in
-      <a href="docs/02-installation/">installation</a>, and the prerequisites per
-      platform are in <a href="docs/14-platform-setup/">platform setup</a>.</p>
+      <a href={`${base}02-installation/`}>installation</a>, and the prerequisites per
+      platform are in <a href={`${base}14-platform-setup/`}>platform setup</a>.</p>
   </div>
 </section>
 
@@ -534,18 +562,40 @@ client.set_secret("db-password", "hunter2")
 print(client.get_secret("db-password").value)   # -&gt; hunter2</code></pre>
     <p class="lede" style="margin-top:28px">The Go, JavaScript and .NET clients
       work the same way. The handshake is described in detail under
-      <a href="docs/09-authentication/">authentication</a>, the family wiring
-      under <a href="docs/11-family-integration/">family integration</a>, and how
-      all of this is tested under <a href="docs/10-testing/">testing</a>.</p>
+      <a href={`${base}09-authentication/`}>authentication</a>, the family wiring
+      under <a href={`${base}11-family-integration/`}>family integration</a>, and how
+      all of this is tested under <a href={`${base}10-testing/`}>testing</a>.</p>
+  </div>
+</section>
+
+
+<section id="docs">
+  <div class="wrap">
+    <h2>Documentation</h2>
+    <!-- THE CURATED INDEX LIVES HERE NOW. This page IS the docs root: it is
+         served at /azure-keyvault-emulator/ and at
+         /azure-keyvault-emulator/docs/ from one build output, so a generated
+         index.md would have collided with it on that second route. -->
+    <ul class="chapters">
+    <li><a href={`${base}01-quickstart/`}><b>Quickstart</b> &mdash; compose up the pair, mint a token, read and write a secret</a></li>
+    <li><a href={`${base}02-installation/`}><b>Installation</b> &mdash; brew, winget, go install, Docker, compose</a></li>
+    <li><a href={`${base}03-architecture/`}><b>Architecture</b> &mdash; the challenge-auth trust model and why it matters</a></li>
+    <li><a href={`${base}08-certificates/`}><b>Certificates</b> &mdash; the data-plane reference</a></li>
+    <li><a href={`${base}09-authentication/`}><b>Authentication</b> &mdash; the challenge handshake, credential paths, the permission map</a></li>
+    <li><a href={`${base}10-testing/`}><b>Testing</b> &mdash; freeze the clock, inject throttling, and what CI proves</a></li>
+    <li><a href={`${base}11-family-integration/`}><b>Family integration</b> &mdash; the three-emulator chain</a></li>
+    <li><a href={`${base}12-roadmap/`}><b>Roadmap</b> &mdash; phases P0-P3 and what is next</a></li>
+    <li><a href={`${base}parity/`}><b>Parity map</b> &mdash; what is real, what is emulated, what is deliberately absent</a></li>
+    </ul>
   </div>
 </section>
 
 <footer>
   <div class="wrap">
     <p><a href="https://github.com/calvinchengx/azure-keyvault-emulator">github.com/calvinchengx/azure-keyvault-emulator</a>
-       &middot; Apache 2.0 &middot; <a href="docs/12-roadmap/">roadmap</a> &middot;
-       <a href="docs/parity/">parity map</a> &middot;
-       <a href="docs/">documentation</a></p>
+       &middot; Apache 2.0 &middot; <a href={`${base}12-roadmap/`}>roadmap</a> &middot;
+       <a href={`${base}parity/`}>parity map</a> &middot;
+       <a href="#docs">documentation</a></p>
     <p>Part of an emulator family that shares one issuer:
        <a href="https://github.com/calvinchengx/entra-emulator">entra-emulator</a> mints the tokens,
        <a href="https://github.com/calvinchengx/arm-emulator">arm-emulator</a> governs the vault resource, and
@@ -594,7 +644,7 @@ print(client.get_secret("db-password").value)   # -&gt; hunter2</code></pre>
   </div>
 </footer>
 
-<script>
+<script define:vars={{ ROOT: root }}>
   // Every number on this page is read at build time from the repository's own
   // manifests: docs/parity.md grades the rows, docs/witnesses.json names the
   // evidence, and scripts/build_landing_data.py reduces both to the file
@@ -607,7 +657,7 @@ print(client.get_secret("db-password").value)   # -&gt; hunter2</code></pre>
   //
   // The fallback is the em dash already in the markup. If the manifest cannot
   // be read, the page says nothing rather than something possibly untrue.
-  fetch('landing-data.json')
+  fetch(ROOT + 'landing-data.json')
     .then(function (r) { return r.ok ? r.json() : null; })
     .then(function (d) {
       if (!d) { return; }

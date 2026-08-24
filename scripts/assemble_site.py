@@ -39,7 +39,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 DIST = ROOT / "website" / "dist"
-LANDING = ROOT / "site" / "index.html"
+# BUILT, not hand-written. website/src/pages/index.astro renders here, so the
+# root and the docs base are one source: there is no second file to drift.
+LANDING = DIST / "index.html"
 ROUTES = ROOT / "website" / "published-routes.txt"
 BASE = "/azure-keyvault-emulator/docs/"
 

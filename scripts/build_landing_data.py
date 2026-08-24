@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """Publish the landing page's numbers, and refuse to publish a page that types them.
 
-site/index.html is hand-written and Astro never sees it, so none of the checks
+The landing page is website/src/pages/index.astro, built by Astro and copied to
+the site root by assemble_site.py. These checks run on the BUILT page, so what
+they assert is true of what is served. It is checked here rather than left to
+the Astro build because none of the checks
 that protect the docs protect it. The specific way a front page goes wrong is
 not a broken tag: it is a number that was true when someone typed it. This
 repository's own README shows the failure already, its parity summary having
@@ -47,7 +50,26 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 PARITY = ROOT / "docs" / "parity.md"
 WITNESSES = ROOT / "docs" / "witnesses.json"
-LANDING = ROOT / "site" / "index.html"
+# The landing page is BUILT now, not hand-written: website/src/pages/index.astro
+# lands here as part of the Starlight build, and assemble_site.py copies it to
+# the site root. Reading the BUILT page is what makes the checks below true of
+# what is actually served -- the .astro source still carries Astro expressions
+# (`href={`${base}...`}`) that are not links until the build resolves them.
+REPO_NAME = "azure-keyvault-emulator"
+# TWO FILES, AND THE SPLIT IS THE POINT.
+#
+# SOURCE is what an author edits. The authoring checks belong here: a
+# hardcoded number, a missing placeholder, a binding the page stopped
+# reading. Astro rewrites markup on the way out -- it appends a scoped class
+# to every styled element, so `class="stats"` becomes
+# `class="stats astro-lcdefpme"` -- and a checker written against the built
+# page would have to be loosened until it stopped catching anything.
+#
+# LANDING is what is SERVED. The link checks belong here, because the source
+# carries Astro expressions (`href={`${base}x/`}`) that are not links until
+# the build resolves them.
+SOURCE = ROOT / "website" / "src" / "pages" / "index.astro"
+LANDING = ROOT / "website" / "dist" / "index.html"
 
 DATA_NAME = "landing-data.json"
 MANIFEST_COPY = "parity-witnesses.json"
@@ -189,7 +211,10 @@ def derive() -> dict:
 
 
 def check_page(html: str, data: dict, failures: list[str]) -> None:
-    if f"fetch('{DATA_NAME}')" not in html:
+    # The name, not the exact call: the page fetches it through an absolute
+    # prefix now -- fetch(ROOT + 'landing-data.json') -- because one file is
+    # served at two depths and a page-relative fetch is correct at only one.
+    if DATA_NAME not in html:
         failures.append(f"the page no longer fetches {DATA_NAME}; nothing would fill it")
 
     for key in REQUIRED_KEYS:
@@ -242,13 +267,23 @@ def check_links(site: pathlib.Path, html: str, failures: list[str]) -> tuple[int
     ids = set(ID_RE.findall(html))
     checked = anchors = 0
 
+    # The published tree does NOT contain the base prefix: GitHub Pages serves
+    # ./_site AT /azure-keyvault-emulator/, so `_site/docs/parity/` is what
+    # `/azure-keyvault-emulator/docs/parity/` resolves to. The page's links are
+    # absolute now -- they have to be, because one file is served at two depths
+    # -- so the prefix is stripped here rather than being mistaken for a
+    # directory that was never written.
+    site_prefix = "/" + REPO_NAME + "/"
+
     def resolve(target: str) -> pathlib.Path:
         clean = target.split("#", 1)[0].split("?", 1)[0]
         clean = clean[2:] if clean.startswith("./") else clean
+        if clean.startswith(site_prefix):
+            clean = clean[len(site_prefix):]
         if clean in ("", "/"):
             return site / "index.html"
         path = site / clean.lstrip("/")
-        return path / "index.html" if clean.endswith("/") else path
+        return path / "index.html" if clean.endswith("/") or not path.suffix else path
 
     for ref in REF_RE.findall(html) + FETCH_RE.findall(html):
         if ref.startswith(EXTERNAL):
@@ -290,9 +325,16 @@ def main() -> int:
     (out / DATA_NAME).write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
     shutil.copyfile(WITNESSES, out / MANIFEST_COPY)
 
+    if not LANDING.is_file():
+        print(f"FAIL: no built landing page at {LANDING} -- run the Astro build "
+              f"first; it renders website/src/pages/index.astro", file=sys.stderr)
+        return 1
+    if not SOURCE.is_file():
+        print(f"FAIL: no landing page source at {SOURCE}", file=sys.stderr)
+        return 1
     html = LANDING.read_text(encoding="utf-8")
     failures: list[str] = []
-    check_page(html, data, failures)
+    check_page(SOURCE.read_text(encoding="utf-8"), data, failures)
 
     links = anchors = 0
     if args.site:

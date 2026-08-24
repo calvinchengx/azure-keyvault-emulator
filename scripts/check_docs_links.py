@@ -41,7 +41,11 @@ README_LINK = re.compile(r"\]\(docs/((?:[a-z0-9-]+/)?[a-z0-9][a-z0-9.-]*\.md)(#[
 SIDEBAR_SLUG = re.compile(r"slug:\s*'([^']+)'")
 
 # The landing page is reached by the site root, not by a sidebar entry.
-EXEMPT_FROM_SIDEBAR = {"index"}
+# Nothing is exempt any more: `index` was, because sync-docs generated a docs
+# index deliberately absent from the sidebar. That page is gone -- the landing
+# page (website/src/pages/index.astro) is the docs root now -- so an exemption
+# here would only hide a page that had fallen out of the sidebar for real.
+EXEMPT_FROM_SIDEBAR: set[str] = set()
 
 # Routes the site GENERATES rather than reads from docs/. `parity-versions.mjs`
 # writes a `parity-history/` index, a `parity-history/changelog`, and one page
