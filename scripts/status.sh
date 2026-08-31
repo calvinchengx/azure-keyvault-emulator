@@ -88,7 +88,19 @@ else
           mark="FAIL"; bad
         fi
         ;;
-      exited)     note="exited $exitc"; mark="FAIL"; bad ;;
+      # A one-shot that FINISHED is not a failure. arm-seed is a seeder with
+      # `restart: "no"`: it writes the role assignment and exits 0, and that
+      # is success. Calling every exited container a failure only looked
+      # right because nothing here waited long enough to see the seed finish
+      # -- `make up` returned first, and status caught arm-seed still running.
+      # A non-zero exit is a real failure and stays one.
+      exited)
+        if [ "$exitc" = "0" ]; then
+          note="completed (exit 0)"
+        else
+          note="exited $exitc"; mark="FAIL"; bad
+        fi
+        ;;
       restarting) note="restarting (crash loop)"; mark="FAIL"; bad ;;
       *)          note="$status"; mark="warn" ;;
     esac
