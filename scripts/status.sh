@@ -33,7 +33,15 @@ bad() { RC=1; }
 # and can still exit non-zero for unrelated reasons (see NULDEV above), and
 # inside `$(...)` a fallback would be APPENDED to the code, not replace it.
 code() {
-  c=$(curl -sk -o "$NULDEV" -w '%{http_code}' --max-time 5 "$1" 2>/dev/null)
+  # `|| true` is what makes the fallback below reachable. Under `set -e` an
+  # assignment whose command substitution fails kills the whole script, so an
+  # unreachable endpoint -- the one case this function exists to survive --
+  # exited with curl's own status and printed nothing: no FAIL line, no
+  # challenge check, no summary. CI reported `Error 35` and named neither the
+  # endpoint nor the problem. `|| true` is deliberately OUTSIDE the
+  # substitution so it cannot append to or discard what curl already printed,
+  # which matters for the exit-23-after-printing case described above.
+  c=$(curl -sk -o "$NULDEV" -w '%{http_code}' --max-time 5 "$1" 2>/dev/null) || true
   case "$c" in
     ''|000|*[!0-9]*) printf '%s' "---" ;;
     *)               printf '%s' "$c" ;;

@@ -62,8 +62,14 @@ help: ## Show the available targets
 doctor: ## Check the toolchain and the docker context this Makefile needs
 	@sh scripts/doctor.sh
 
+# --wait, because `up -d` returns once containers are STARTED and the vault's
+# own healthcheck is still in its start period. The documented sequence in the
+# README, `make up` then `make status`, therefore raced the vault every time
+# and reported it unreachable. --wait tolerates arm-seed: a one-shot that exits
+# is treated as satisfied. It does NOT verify the seed succeeded -- --wait
+# returns 0 even when a one-shot exits non-zero -- so do not read it as one.
 up: ## Start the stack in the background (NOARM=1 drops ARM governance; PROFILE="--profile full" adds fabric)
-	$(COMPOSE) up -d
+	$(COMPOSE) up -d --wait
 
 down: ## Stop and remove containers
 	$(COMPOSE) down

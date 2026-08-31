@@ -143,6 +143,32 @@ jobs:
           make -n logs SVC=keyvault-emulator
           make -n up PROFILE="--profile full"
 
+      # status.sh's whole job is to REPORT that something is unreachable, so
+      # the unreachable case is the one that has to be tested. It was broken:
+      # `set -e` plus an assignment from a failing curl killed the script at
+      # the first dead endpoint, and it exited with curl's status having named
+      # nothing. That is not an OS-specific bug, so this runs everywhere --
+      # it needs no containers, only a closed port.
+      - name: status.sh reports an unreachable endpoint instead of dying on it
+        shell: bash
+        run: |
+          set -uo pipefail
+          out=$(COMPOSE_PROJECT_NAME=no-such-project-for-this-test \
+                VAULT_URL=https://127.0.0.1:59999 \
+                ENTRA_URL=https://127.0.0.1:59999 \
+                sh scripts/status.sh 2>&1); rc=$?
+          echo "$out"
+          echo "exit=$rc"
+          # 1 is "checks failed", which is the answer. curl's own codes (7
+          # connection refused, 35 TLS) mean the script died mid-probe.
+          [ "$rc" = 1 ] || { echo "::error::expected exit 1, got $rc — status.sh died instead of reporting"; exit 1; }
+          # Both probes must be REACHED and reported, not just the first.
+          grep -q 'FAIL  entra discovery .*HTTP ---' <<<"$out" || { echo "::error::entra probe not reported"; exit 1; }
+          grep -q 'FAIL  vault /health .*HTTP ---'   <<<"$out" || { echo "::error::vault probe not reported — the script stopped early"; exit 1; }
+          # And the sections after the probes must still run.
+          grep -q '401 challenge' <<<"$out" || { echo "::error::challenge section never ran"; exit 1; }
+          grep -q 'pair has problems' <<<"$out" || { echo "::error::summary never printed"; exit 1; }
+
       - name: make test
         shell: bash
         run: make test
