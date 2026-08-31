@@ -143,6 +143,72 @@ jobs:
           make -n logs SVC=keyvault-emulator
           make -n up PROFILE="--profile full"
 
+      # status.sh's whole job is to REPORT that something is unreachable, so
+      # the unreachable case is the one that has to be tested. It was broken:
+      # `set -e` plus an assignment from a failing curl killed the script at
+      # the first dead endpoint, and it exited with curl's status having named
+      # nothing. That is not an OS-specific bug, so this runs everywhere --
+      # it needs no containers, only a closed port.
+      - name: status.sh reports an unreachable endpoint instead of dying on it
+        shell: bash
+        run: |
+          # `if out=$(...)` rather than a bare assignment, for exactly the
+          # reason this step exists. GitHub runs `shell: bash` as
+          # `bash --noprofile --norc -e -o pipefail`, so -e is already on and
+          # `set +e`/`set -uo pipefail` at the top of the script cannot be
+          # relied on to express intent here. An assignment that fails would
+          # kill the step before the first echo -- which is how this very step
+          # failed on its first run, reproducing the defect under test.
+          # Assignments inside an `if` condition are exempt from -e.
+          if out=$(COMPOSE_PROJECT_NAME=no-such-project-for-this-test \
+                   VAULT_URL=https://127.0.0.1:59999 \
+                   ENTRA_URL=https://127.0.0.1:59999 \
+                   sh scripts/status.sh 2>&1); then rc=0; else rc=$?; fi
+          echo "$out"
+          echo "exit=$rc"
+          # 1 is "checks failed", which is the answer. curl's own codes (7
+          # connection refused, 35 TLS) mean the script died mid-probe.
+          [ "$rc" = 1 ] || { echo "::error::expected exit 1, got $rc — status.sh died instead of reporting"; exit 1; }
+          # Both probes must be REACHED and reported, not just the first.
+          grep -q 'FAIL  entra discovery .*HTTP ---' <<<"$out" || { echo "::error::entra probe not reported"; exit 1; }
+          grep -q 'FAIL  vault /health .*HTTP ---'   <<<"$out" || { echo "::error::vault probe not reported — the script stopped early"; exit 1; }
+          # And the sections after the probes must still run.
+          grep -q '401 challenge' <<<"$out" || { echo "::error::challenge section never ran"; exit 1; }
+          grep -q 'pair has problems' <<<"$out" || { echo "::error::summary never printed"; exit 1; }
+
+      # The `make up / status / down` step below does NOT reliably cover this.
+      # Whether arm-seed has exited by the time status runs is a race, and on
+      # the run that introduced this fix it was still running -- so the
+      # classification that was just changed went untested. Two throwaway
+      # containers wearing the compose labels make it deterministic.
+      - name: status.sh calls a finished one-shot done, and a failed one failed
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          P=status-oneshot-test
+          docker rm -f $P-ok $P-bad >/dev/null 2>&1 || true
+          for c in "ok:0" "bad:3"; do
+            n=${c%%:*}; rc=${c##*:}
+            docker run -d --name "$P-$n" \
+              --label com.docker.compose.project=$P \
+              --label com.docker.compose.service=seeder-$n \
+              alpine:3.20 sh -c "exit $rc" >/dev/null
+          done
+          # Wait for both to actually exit, or the test asserts on "running".
+          for _ in $(seq 1 30); do
+            running=$(docker ps -q --filter "label=com.docker.compose.project=$P" | wc -l)
+            [ "$running" = 0 ] && break
+            sleep 1
+          done
+          if out=$(COMPOSE_PROJECT_NAME=$P VAULT_URL=https://127.0.0.1:59999 \
+                   ENTRA_URL=https://127.0.0.1:59999 sh scripts/status.sh 2>&1); then :; fi
+          docker rm -f $P-ok $P-bad >/dev/null 2>&1 || true
+          echo "$out"
+          grep -q 'ok    seeder-ok .*completed (exit 0)' <<<"$out" \
+            || { echo "::error::a one-shot that exited 0 was not reported as completed"; exit 1; }
+          grep -q 'FAIL  seeder-bad .*exited 3' <<<"$out" \
+            || { echo "::error::a one-shot that exited non-zero was not reported as a failure"; exit 1; }
+
       - name: make test
         shell: bash
         run: make test

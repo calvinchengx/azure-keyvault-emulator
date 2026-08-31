@@ -62,8 +62,20 @@ help: ## Show the available targets
 doctor: ## Check the toolchain and the docker context this Makefile needs
 	@sh scripts/doctor.sh
 
+# `up -d` returns once containers are STARTED, with the vault's own healthcheck
+# still inside its start period, so the sequence the README documents -- `make
+# up` then `make status` -- raced the vault every time and reported it
+# unreachable.
+#
+# NOT `up -d --wait`: compose fails --wait when a one-shot exits, and arm-seed
+# is a one-shot that exits 0 on success. That is version-dependent (compose
+# 5.1 accepts it, the compose on ubuntu-latest reports
+# `container ... exited (0)` and returns 1), so it cannot be relied on either
+# way. wait-ready.sh polls status.sh, which is the definition of ready this
+# repo already has, and behaves the same on every compose.
 up: ## Start the stack in the background (NOARM=1 drops ARM governance; PROFILE="--profile full" adds fabric)
 	$(COMPOSE) up -d
+	@sh scripts/wait-ready.sh
 
 down: ## Stop and remove containers
 	$(COMPOSE) down
