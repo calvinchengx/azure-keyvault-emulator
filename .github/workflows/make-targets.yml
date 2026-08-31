@@ -176,6 +176,39 @@ jobs:
           grep -q '401 challenge' <<<"$out" || { echo "::error::challenge section never ran"; exit 1; }
           grep -q 'pair has problems' <<<"$out" || { echo "::error::summary never printed"; exit 1; }
 
+      # The `make up / status / down` step below does NOT reliably cover this.
+      # Whether arm-seed has exited by the time status runs is a race, and on
+      # the run that introduced this fix it was still running -- so the
+      # classification that was just changed went untested. Two throwaway
+      # containers wearing the compose labels make it deterministic.
+      - name: status.sh calls a finished one-shot done, and a failed one failed
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          P=status-oneshot-test
+          docker rm -f $P-ok $P-bad >/dev/null 2>&1 || true
+          for c in "ok:0" "bad:3"; do
+            n=${c%%:*}; rc=${c##*:}
+            docker run -d --name "$P-$n" \
+              --label com.docker.compose.project=$P \
+              --label com.docker.compose.service=seeder-$n \
+              alpine:3.20 sh -c "exit $rc" >/dev/null
+          done
+          # Wait for both to actually exit, or the test asserts on "running".
+          for _ in $(seq 1 30); do
+            running=$(docker ps -q --filter "label=com.docker.compose.project=$P" | wc -l)
+            [ "$running" = 0 ] && break
+            sleep 1
+          done
+          if out=$(COMPOSE_PROJECT_NAME=$P VAULT_URL=https://127.0.0.1:59999 \
+                   ENTRA_URL=https://127.0.0.1:59999 sh scripts/status.sh 2>&1); then :; fi
+          docker rm -f $P-ok $P-bad >/dev/null 2>&1 || true
+          echo "$out"
+          grep -q 'ok    seeder-ok .*completed (exit 0)' <<<"$out" \
+            || { echo "::error::a one-shot that exited 0 was not reported as completed"; exit 1; }
+          grep -q 'FAIL  seeder-bad .*exited 3' <<<"$out" \
+            || { echo "::error::a one-shot that exited non-zero was not reported as a failure"; exit 1; }
+
       - name: make test
         shell: bash
         run: make test
