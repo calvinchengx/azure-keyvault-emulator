@@ -152,11 +152,18 @@ jobs:
       - name: status.sh reports an unreachable endpoint instead of dying on it
         shell: bash
         run: |
-          set -uo pipefail
-          out=$(COMPOSE_PROJECT_NAME=no-such-project-for-this-test \
-                VAULT_URL=https://127.0.0.1:59999 \
-                ENTRA_URL=https://127.0.0.1:59999 \
-                sh scripts/status.sh 2>&1); rc=$?
+          # `if out=$(...)` rather than a bare assignment, for exactly the
+          # reason this step exists. GitHub runs `shell: bash` as
+          # `bash --noprofile --norc -e -o pipefail`, so -e is already on and
+          # `set +e`/`set -uo pipefail` at the top of the script cannot be
+          # relied on to express intent here. An assignment that fails would
+          # kill the step before the first echo -- which is how this very step
+          # failed on its first run, reproducing the defect under test.
+          # Assignments inside an `if` condition are exempt from -e.
+          if out=$(COMPOSE_PROJECT_NAME=no-such-project-for-this-test \
+                   VAULT_URL=https://127.0.0.1:59999 \
+                   ENTRA_URL=https://127.0.0.1:59999 \
+                   sh scripts/status.sh 2>&1); then rc=0; else rc=$?; fi
           echo "$out"
           echo "exit=$rc"
           # 1 is "checks failed", which is the answer. curl's own codes (7
