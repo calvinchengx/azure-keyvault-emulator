@@ -27,6 +27,39 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+      # GoReleaser's skip_upload guard skips a publisher when its token is unset.
+      # A fork needs that. On this repo the same silence is a bug: this repo and
+      # its sibling both released for weeks with a green workflow and no cask in
+      # calvinchengx/homebrew-tap, because a missing secret and a fork look
+      # identical to that guard. So enumerate the states that are fine, refuse
+      # the rest, and print what was actually seen. Forks keep the old behaviour.
+      #
+      # This runs BEFORE GoReleaser on purpose: a failure here publishes nothing,
+      # so the fix is add-the-secret and re-run, not a half-published release.
+      - name: Publish tokens are present (canonical repo only)
+        if: github.repository_owner == 'calvinchengx'
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
+        run: |
+          set -euo pipefail
+          missing=""
+          if [ -n "${HOMEBREW_TAP_TOKEN:-}" ]; then
+            echo "  set      HOMEBREW_TAP_TOKEN"
+          else
+            echo "  MISSING  HOMEBREW_TAP_TOKEN  (homebrew_casks would be skipped)"
+            missing="${missing} HOMEBREW_TAP_TOKEN"
+          fi
+          if [ -n "${WINGET_TOKEN:-}" ]; then
+            echo "  set      WINGET_TOKEN"
+          else
+            echo "  MISSING  WINGET_TOKEN  (winget would be skipped)"
+            missing="${missing} WINGET_TOKEN"
+          fi
+          if [ -n "${missing}" ]; then
+            echo "::error::Unset publish secret(s):${missing}. GoReleaser skips those publishers and still exits 0, so this release would look green while publishing nothing. Add the secret, or delete that publisher from .goreleaser.yaml to opt out deliberately."
+            exit 1
+          fi
       - uses: goreleaser/goreleaser-action@v7
         with:
           version: '~> v2'
