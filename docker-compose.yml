@@ -59,7 +59,7 @@ services:
   # stand up a vault that refuses its own quickstart. One shot, idempotent, and
   # readable: scripts/seed-arm.py is the documentation for doing it by hand.
   arm-seed:
-    image: python:3.12-alpine
+    image: mirror.gcr.io/library/python:3.12-alpine
     restart: "no"
     depends_on:
       arm-emulator:
