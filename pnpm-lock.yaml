@@ -5256,10 +5256,6 @@ snapshots:
     dependencies:
       '@jridgewell/sourcemap-codec': 1.6.0
 
-  magic-string@1.4.2:
-    dependencies:
-      '@jridgewell/sourcemap-codec': 1.6.0
-
   magicast@0.5.5:
     dependencies:
       '@babel/parser': 7.29.9
