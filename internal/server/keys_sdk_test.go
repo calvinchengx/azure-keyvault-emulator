@@ -188,6 +188,7 @@ func TestAzkeysECSignVerify(t *testing.T) {
 	// Local verification against the returned JWK (raw r||s signature).
 	x := new(big.Int).SetBytes(created.Key.X)
 	y := new(big.Int).SetBytes(created.Key.Y)
+	//nolint:staticcheck // SA1019: reconstructed from the raw JWK x/y the emulator returned, which is the point of the test
 	pub := &ecdsa.PublicKey{Curve: elliptic.P256(), X: x, Y: y}
 	half := len(signed.Result) / 2
 	r := new(big.Int).SetBytes(signed.Result[:half])
