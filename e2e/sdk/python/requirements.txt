@@ -4,13 +4,13 @@ azure-core==1.41.0
     #   azure-keyvault-certificates
     #   azure-keyvault-keys
     #   azure-keyvault-secrets
-azure-identity==1.25.3
+azure-identity==1.26.0
     # via -r requirements.in
-azure-keyvault-certificates==4.11.2
+azure-keyvault-certificates==4.11.3
     # via -r requirements.in
-azure-keyvault-keys==4.11.2
+azure-keyvault-keys==4.11.3
     # via -r requirements.in
-azure-keyvault-secrets==4.11.2
+azure-keyvault-secrets==4.11.3
     # via -r requirements.in
 certifi==2026.10.19
     # via requests
@@ -31,7 +31,7 @@ isodate==0.7.2
     #   azure-keyvault-certificates
     #   azure-keyvault-keys
     #   azure-keyvault-secrets
-msal==1.37.0
+msal==1.39.0
     # via
     #   azure-identity
     #   msal-extensions
